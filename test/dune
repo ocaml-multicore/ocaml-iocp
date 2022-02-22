@@ -1,0 +1,11 @@
+(executable
+ (name read)
+ (libraries iocp))
+
+(rule
+ (deps ./test.md)
+ (action (with-stdout-to data.out (run ./read.exe ./test.md))))
+
+(rule
+ (alias runtest)
+ (action (diff test.md data.out)))

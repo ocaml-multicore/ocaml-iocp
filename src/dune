@@ -1,0 +1,7 @@
+(library
+ (name iocp)
+ (public_name iocp)
+ (libraries unix cstruct)
+ (foreign_stubs
+   (language c)
+   (names iocp_stubs)))
