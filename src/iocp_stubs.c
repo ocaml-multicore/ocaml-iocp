@@ -1,4 +1,3 @@
-
 /*----------------------------------------------------------------------
    Copyright (c) 2022 Patrick Ferris <patrick@sirref.org>
    Distributed under the MIT license. See terms at the end of this file.
@@ -57,12 +56,12 @@ value ocaml_iocp_make_overlapped(value v_unit) {
 }
 
 // The key cannot be GC'd until the event is complete
-value ocaml_iocp_create_io_completion_port(value v_key, value v_threads) {
+value ocaml_iocp_create_io_completion_port(value v_threads) {
     CAMLparam0();
     CAMLlocal1(v);
     int num_threads = Int_val(v_threads);
 
-    HANDLE cp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, v_key, num_threads);
+    HANDLE cp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, num_threads);
 
     v = win_alloc_handle(cp);
 
@@ -134,6 +133,25 @@ value ocaml_iocp_read_file_bytes(value* values, int argc) {
     return ocaml_iocp_read_file(values[0], values[1], values[2], values[3], values[4], values[5]);
 }
 
+value ocaml_iocp_write_file(value v_cp, value v_fd, value v_id, value v_ba, value v_num_bytes, value v_overlapped) {
+    CAMLparam4(v_cp, v_fd, v_ba, v_overlapped);
+    LPOVERLAPPED ol = Overlapped_val(v_overlapped);
+
+    // Here we associate the file handle to the completion port handle...
+    HANDLE _cp = CreateIoCompletionPort(Handle_val(v_fd), Handle_val(v_cp), Long_val(v_id), 0);
+    BOOL b = WriteFile(Handle_val(v_fd), Caml_ba_data_val(v_ba), Int_val(v_num_bytes), NULL, ol);
+
+    // The return value is non-zero (TRUE) on success. However, it is FALSE if the IO operation
+    // is completing asynchronously. We change that behaviour by checking last error.
+    if (GetLastError() == ERROR_IO_PENDING) {
+        CAMLreturn(Val_true);
+    }
+    CAMLreturn(Val_bool(b));
+}
+
+value ocaml_iocp_write_file_bytes(value* values, int argc) {
+    return ocaml_iocp_write_file(values[0], values[1], values[2], values[3], values[4], values[5]);
+}
 
 /*---------------------------------------------------------------------------
    Copyright (c) 2022 <patrick@sirref.org>
