@@ -1,16 +1,25 @@
+(* {1 Input/Output Completion Ports}*)
+
 module Overlapped : sig
   type t
+  (** An overlapped structure used for asynchronous IO. *)
 
   val create : unit -> t
+  (** The default structure that is completely empty. *)
 end
 
 module Handle : sig
-    type t
-    (** A handle to the device which could be a file, a console buffer
+    type t = private Unix.file_descr
+    (** A handle to the device which could be a file, a console buffer,
         a socket, pipe etc. *)
     
     val openfile : string -> Unix.open_flag list -> Unix.file_perm -> t
+    (** An exact copy {! Unix.openfile} except the [FILE_FLAG_OVERLAPPED] is added
+        to the flags when opening the file. *)
+
     val to_unix : t -> Unix.file_descr
+    (** Converts a handle to a unix file-descriptor. Note you can also do type coercion too,
+        such as [(fd :> Unix.file_descr)]. *)
 end
 
 (** {2 Input/Ouput Completion Ports} 
@@ -22,7 +31,7 @@ type 'a t
 
 type 'a job
 
-val create : ?threads:int -> 'a -> 'a t
+val create : ?threads:int -> unit -> 'a t
 
 val create_with_fd : ?threads:int -> Handle.t -> 'a -> 'a t
 (** [create ?threads fd data] makes a new IOCP for the handle [fd], associating
@@ -41,4 +50,5 @@ val get_queued_completion_status : 'a t  -> 'a completion_status option
 
 (** {2 File Operations} *)
 
-val read_file_exn : int t -> Handle.t -> Cstruct.t -> int -> Overlapped.t -> int job option
+val read_file : 'a t -> Handle.t -> Cstruct.t -> int -> 'a -> Overlapped.t -> 'a job option
+val write_file : 'a t -> Handle.t -> Cstruct.t -> int -> 'a -> Overlapped.t -> 'a job option

@@ -1,11 +1,13 @@
 (executable
- (name read)
+ (name copy)
  (libraries iocp))
 
 (rule
+ (alias runtest)
  (deps ./test.md)
- (action (with-stdout-to data.out (run ./read.exe ./test.md))))
+ (target ./test.out)
+ (action (run ./copy.exe ./test.md ./test.out)))
 
 (rule
  (alias runtest)
- (action (diff test.md data.out)))
+ (action (diff test.md test.out)))
