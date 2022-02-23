@@ -1,7 +1,21 @@
-/*----------------------------------------------------------------------
-   Copyright (c) 2022 Patrick Ferris <patrick@sirref.org>
-   Distributed under the MIT license. See terms at the end of this file.
-  ----------------------------------------------------------------------*/
+// Sockaddr implementation borrow from io_uring bindings
+
+/*
+ * Copyright (C) 2020-2021 Anil Madhavapeddy
+ * Copyright (C) 2020-2021 Sadiq Jaffer
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
 
 // OCaml APIs
 #include <caml/alloc.h>
@@ -16,8 +30,62 @@
 #include <caml/osdeps.h>
 
 // Windows APIs
+#define WIN32_LEAN_AND_MEAN
 #include <Fileapi.h>
 #include <Minwinbase.h>
+#include <Mswsock.h>
+#include <stdio.h>
+
+struct sock_addr_data {
+  union sock_addr_union sock_addr_addr;
+  socklen_param_type sock_addr_len;
+};
+
+#define Sock_addr_val(v) (*((struct sock_addr_data **) Data_custom_val(v)))
+
+static void finalize_sock_addr(value v) {
+  caml_stat_free(Sock_addr_val(v));
+  Sock_addr_val(v) = NULL;
+}
+
+static struct custom_operations sockaddr_ops = {
+  "iocp.sockaddr",
+  finalize_sock_addr,
+  custom_compare_default,
+  custom_hash_default,
+  custom_serialize_default,
+  custom_deserialize_default,
+  custom_compare_ext_default,
+  custom_fixed_length_default
+};
+
+value
+ocaml_iocp_make_sockaddr(value v_sockaddr) {
+  CAMLparam1(v_sockaddr);
+  CAMLlocal1(v);
+  struct sock_addr_data *data;
+  v = caml_alloc_custom_mem(&sockaddr_ops, sizeof(struct sock_addr_data *), sizeof(struct sock_addr_data));
+  Sock_addr_val(v) = NULL;
+  data = (struct sock_addr_data *) caml_stat_alloc(sizeof(struct sock_addr_data));
+  Sock_addr_val(v) = data;
+  // If this raises, the GC will free [v], which will free [data]:
+  get_sockaddr(v_sockaddr, &data->sock_addr_addr, &data->sock_addr_len);
+  CAMLreturn(v);
+}
+
+value
+ocaml_iocp_extract_sockaddr(value v) {
+  CAMLparam1(v);
+  CAMLlocal1(v_sockaddr);
+  struct sock_addr_data *data = Sock_addr_val(v);
+  v_sockaddr = alloc_sockaddr(&data->sock_addr_addr, data->sock_addr_len, -1);
+  CAMLreturn(v_sockaddr);
+}
+
+/*-----------------------------------------------------------------------
+   Copyright (c) 2022 Patrick Ferris <patrick@sirref.org>
+   Distributed under the MIT license. See terms further down in the file.
+  -----------------------------------------------------------------------*/
 
 // Overlapped data structure:
 // Contains information for asynchronous (i.e. overlapped) input and output
@@ -51,7 +119,6 @@ value ocaml_iocp_make_overlapped(value v_unit) {
     ol = (LPOVERLAPPED) caml_stat_alloc(sizeof(OVERLAPPED));
     Overlapped_val(v) = ol;
     memset(ol, 0, sizeof(OVERLAPPED));
-    // ol->Offset = 2;
     CAMLreturn(v);
 }
 
@@ -153,6 +220,114 @@ value ocaml_iocp_write_file_bytes(value* values, int argc) {
     return ocaml_iocp_write_file(values[0], values[1], values[2], values[3], values[4], values[5]);
 }
 
+GUID GuidGetAddrAcceptEx = WSAID_GETACCEPTEXSOCKADDRS;
+
+value ocaml_iocp_get_accept_ex_sockaddr(value v_accept_buffer, value v_listen, value v_sockaddr) {
+    CAMLparam3(v_listen, v_accept_buffer, v_sockaddr);
+    LPFN_GETACCEPTEXSOCKADDRS lpfnGetAcceptExSockaddrs = NULL;
+    DWORD dwBytes;
+    int result;
+
+    result = WSAIoctl(
+        Socket_val(v_listen), 
+        SIO_GET_EXTENSION_FUNCTION_POINTER,
+        &GuidGetAddrAcceptEx,
+        sizeof(GuidGetAddrAcceptEx),
+        &lpfnGetAcceptExSockaddrs,
+        sizeof(lpfnGetAcceptExSockaddrs),
+        &dwBytes, NULL, NULL);
+
+    if (result == SOCKET_ERROR) {
+        printf("Socket address error\n");
+        CAMLreturn(Val_false);
+    }
+    
+    int lsize = 0;
+    SOCKADDR *pLocal = NULL, *pRemote = NULL;
+    
+    struct sock_addr_data *data = Sock_addr_val(v_sockaddr);
+    // struct sockaddr_in *remote = &(data->sock_addr_addr.s_gen);
+
+    lpfnGetAcceptExSockaddrs(
+        Caml_ba_data_val(v_accept_buffer),
+        0,
+        sizeof(union sock_addr_union) + 16,
+        sizeof(union sock_addr_union) + 16,
+        &pLocal,
+        &lsize,
+        &pRemote,
+        &(data->sock_addr_len));
+
+    // TODO: Is there a non-copying way to get this to work?
+    memcpy(&(data->sock_addr_addr), pRemote, data->sock_addr_len);
+
+    CAMLreturn(Val_unit);
+}
+
+// We have to retrieve a pointer to AcceptEx at runtime
+GUID GuidAcceptEx = WSAID_ACCEPTEX;
+
+value ocaml_iocp_accept(value v_cp, value v_listen, value v_accept, value v_id, value v_accept_buffer, value v_overlapped) {
+    CAMLparam5(v_cp, v_listen, v_accept, v_accept_buffer, v_overlapped);
+    LPOVERLAPPED ol = Overlapped_val(v_overlapped);
+    DWORD received;
+    int result;
+
+    LPFN_ACCEPTEX lpfnAcceptEx = NULL;
+    DWORD dwBytes;
+
+    result = WSAIoctl(
+        Socket_val(v_listen), 
+        SIO_GET_EXTENSION_FUNCTION_POINTER,
+        &GuidAcceptEx,
+        sizeof(GuidAcceptEx),
+        &lpfnAcceptEx,
+        sizeof(lpfnAcceptEx),
+        &dwBytes, NULL, NULL);
+
+    if (result == SOCKET_ERROR) {
+        printf("Socket address error!\n");
+        CAMLreturn(Val_false);
+    }
+
+    // Here we associate the socket value to the completion port
+    HANDLE cp1 = CreateIoCompletionPort((HANDLE) Socket_val(v_listen), Handle_val(v_cp), Long_val(v_id), 0);
+    HANDLE cp2 = CreateIoCompletionPort((HANDLE) Socket_val(v_accept), Handle_val(v_cp), Long_val(v_id), 0);
+
+    if (cp1 == NULL || cp2 == NULL) {
+        printf("Error associating completion port to accept socket\n");
+        CAMLreturn(Val_false);
+    }
+
+    DWORD *buf = Caml_ba_data_val(v_accept_buffer);
+
+    // By default, AcceptEx wants to wait for the connection along with first bit of data. The buffer it
+    // accepts as an argument wants data for the first incoming message, the local address and the remote
+    // address. We're only interested in the remote address.
+    BOOL b = lpfnAcceptEx(
+        Socket_val(v_listen),               // The listening socket
+        Socket_val(v_accept),               // A socket on which to accept an incoming connection (not bound or connected) ?
+        Caml_ba_data_val(v_accept_buffer),  // An output buffer that receives the first block of data (and sockaddr)
+        0,                                  // Receive data length, the number of bytes in the buffer         
+        sizeof(union sock_addr_union) + 16, // Number of bytes reserved for local address information
+        sizeof(union sock_addr_union) + 16, // Number of bytes reserved for remote address information
+        &received,                          // Pointer to DWORD for number of bytes received
+        ol);                                // The OVERLAPPED structure
+
+    // The return value is non-zero (TRUE) on success. However, it is FALSE if the IO operation
+    // is completing asynchronously. We change that behaviour by checking last error.
+    if (GetLastError() == ERROR_IO_PENDING) {
+        CAMLreturn(Val_true);
+    }
+
+    printf("ERROR %i %i", b, GetLastError());
+    CAMLreturn(Val_bool(b));
+}
+
+value ocaml_iocp_accept_bytes(value* values, int argc) {
+    return ocaml_iocp_accept(values[0], values[1], values[2], values[3], values[4], values[5]);
+}
+
 /*---------------------------------------------------------------------------
    Copyright (c) 2022 <patrick@sirref.org>
    
@@ -168,6 +343,10 @@ value ocaml_iocp_write_file_bytes(value* values, int argc) {
    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
    DEALINGS IN THE SOFTWARE.
   ---------------------------------------------------------------------------*/
+
+// We need an openfile that passes FILE_FLAGS_OVERLAPPED -- the quickest way
+// was for me to copy the openfile from win32 in ocaml/ocaml... TODO: something
+// better ?
 
 /**************************************************************************/
 /*                                                                        */
