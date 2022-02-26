@@ -19,12 +19,12 @@ let () =
   let fd = Iocp.Handle.openfile Sys.argv.(1) [O_RDONLY] 0 in
   let out = Iocp.Handle.openfile Sys.argv.(2) [O_WRONLY; O_CREAT; O_TRUNC] 0o644 in
   let buf = Cstruct.create 1024 in
-  let _job = Iocp.read_file iocp fd buf 1024 `R (Iocp.Overlapped.create ()) in
+  let _job = Iocp.read_fixed iocp fd buf ~off:0 ~len:1024 `R in
   match Iocp.get_queued_completion_status iocp with
     | None -> assert false
     | Some t ->
       assert (t.data = `R);
-      let _job = Iocp.write_file iocp out buf t.bytes_transferred `W (Iocp.Overlapped.create ()) in
+      let _job = Iocp.write_fixed iocp out buf ~off:0 ~len:t.bytes_transferred `W in
       match Iocp.get_queued_completion_status iocp with
       | None -> assert false
       | Some t ->

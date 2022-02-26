@@ -7,8 +7,8 @@ module Overlapped : sig
   type t
   (** An overlapped structure used for asynchronous IO. *)
 
-  val create : unit -> t
-  (** The default structure that is completely empty. *)
+  val create : ?off:int -> unit -> t
+  (** An overlapped structure where the offset can be set (defaults to 0). *)
 end
 
 module Handle : sig
@@ -58,10 +58,15 @@ val get_queued_completion_status : 'a t  -> 'a completion_status option
 (** [get_queued_completion_status t] will wait indefinitely for a completion packet to arrive 
     at the completion port [t]. *)
 
-(** {2 File Operations} *)
+val read_fixed : 'a t -> Handle.t -> Cstruct.t -> off:int -> len:int -> 'a -> 'a job option
+(** [read_fixed t fd buf off len d] reads [len] bytes of data from [fd] at a given offset [off]
+    using [t] as the completion port for the read request. [d] is the user associated data for 
+    the request. *)
 
-val read_file : 'a t -> Handle.t -> Cstruct.t -> int -> 'a -> Overlapped.t -> 'a job option
-val write_file : 'a t -> Handle.t -> Cstruct.t -> int -> 'a -> Overlapped.t -> 'a job option
+val write_fixed  : 'a t -> Handle.t -> Cstruct.t -> off:int -> len:int -> 'a -> 'a job option
+(** [write_fixed t fd buf off len d] writes [len] bytes of data to [fd] at a given offset [off]
+    using [t] as the completion port for the write request. [d] is the user associated data for 
+    the request. *)
 
 (** {2 Networking} *)
 module Sockaddr = Sockaddr

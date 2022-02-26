@@ -107,7 +107,7 @@ static struct custom_operations overlapped_ops = {
     custom_fixed_length_default
 };
 
-value ocaml_iocp_make_overlapped(value v_unit) {
+value ocaml_iocp_make_overlapped(value v_off) {
     CAMLparam0();
     CAMLlocal1(v);
     LPOVERLAPPED ol;
@@ -119,6 +119,7 @@ value ocaml_iocp_make_overlapped(value v_unit) {
     ol = (LPOVERLAPPED) caml_stat_alloc(sizeof(OVERLAPPED));
     Overlapped_val(v) = ol;
     memset(ol, 0, sizeof(OVERLAPPED));
+    ol->Offset = Int_val(v_off);
     CAMLreturn(v);
 }
 
@@ -180,7 +181,7 @@ value ocaml_iocp_get_queued_completion_status(value v_fd) {
     CAMLreturn(v);
 }
 
-value ocaml_iocp_read_file(value v_cp, value v_fd, value v_id, value v_ba, value v_num_bytes, value v_overlapped) {
+value ocaml_iocp_read_fixed(value v_cp, value v_fd, value v_id, value v_ba, value v_num_bytes, value v_overlapped) {
     CAMLparam4(v_cp, v_fd, v_ba, v_overlapped);
     LPOVERLAPPED ol = Overlapped_val(v_overlapped);
 
@@ -196,11 +197,11 @@ value ocaml_iocp_read_file(value v_cp, value v_fd, value v_id, value v_ba, value
     CAMLreturn(Val_bool(b));
 }
 
-value ocaml_iocp_read_file_bytes(value* values, int argc) {
-    return ocaml_iocp_read_file(values[0], values[1], values[2], values[3], values[4], values[5]);
+value ocaml_iocp_read_fixed_bytes(value* values, int argc) {
+    return ocaml_iocp_read_fixed(values[0], values[1], values[2], values[3], values[4], values[5]);
 }
 
-value ocaml_iocp_write_file(value v_cp, value v_fd, value v_id, value v_ba, value v_num_bytes, value v_overlapped) {
+value ocaml_iocp_write_fixed(value v_cp, value v_fd, value v_id, value v_ba, value v_num_bytes, value v_overlapped) {
     CAMLparam4(v_cp, v_fd, v_ba, v_overlapped);
     LPOVERLAPPED ol = Overlapped_val(v_overlapped);
 
@@ -216,8 +217,8 @@ value ocaml_iocp_write_file(value v_cp, value v_fd, value v_id, value v_ba, valu
     CAMLreturn(Val_bool(b));
 }
 
-value ocaml_iocp_write_file_bytes(value* values, int argc) {
-    return ocaml_iocp_write_file(values[0], values[1], values[2], values[3], values[4], values[5]);
+value ocaml_iocp_write_fixed_bytes(value* values, int argc) {
+    return ocaml_iocp_write_fixed(values[0], values[1], values[2], values[3], values[4], values[5]);
 }
 
 GUID GuidGetAddrAcceptEx = WSAID_GETACCEPTEXSOCKADDRS;
