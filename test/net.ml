@@ -30,7 +30,7 @@ let () =
     let unix = Iocp.Sockaddr.get sockaddr in
     print_sockaddr unix;
     let buf = Cstruct.create 1024 in
-    let _job = Iocp.read_file iocp sock_accept buf 1024 `R (Iocp.Overlapped.create ()) in
+    let _job = Iocp.read_fixed iocp sock_accept buf ~off:0 ~len:1024 `R in
     match Iocp.get_queued_completion_status iocp with
     | None -> assert false
     | Some t ->

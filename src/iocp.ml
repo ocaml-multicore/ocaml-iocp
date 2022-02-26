@@ -6,7 +6,9 @@
 module Overlapped = struct
   type t
 
-  external create : unit -> t = "ocaml_iocp_make_overlapped"
+  external create : int -> t = "ocaml_iocp_make_overlapped"
+  let create ?(off = 0) () =
+    create off
 end
 
 module Sockaddr = Sockaddr
@@ -57,8 +59,8 @@ module Iocp = struct
   (* external get_queue_completion_status_timeout : t -> int -> completion_status = "ocaml_iocp_get_queued_completion_status_timeout"  *)
 
   (* Operations *)
-  external read_file : t -> Handle.t -> id -> Cstruct.buffer -> int -> Overlapped.t -> bool = "ocaml_iocp_read_file_bytes" "ocaml_iocp_read_file"
-  external write_file : t -> Handle.t -> id -> Cstruct.buffer -> int -> Overlapped.t -> bool = "ocaml_iocp_write_file_bytes" "ocaml_iocp_write_file"
+  external read_fixed : t -> Handle.t -> id -> Cstruct.buffer -> int -> Overlapped.t -> bool = "ocaml_iocp_read_fixed_bytes" "ocaml_iocp_read_fixed"
+  external write_fixed : t -> Handle.t -> id -> Cstruct.buffer -> int -> Overlapped.t -> bool = "ocaml_iocp_write_fixed_bytes" "ocaml_iocp_write_fixed"
   external accept : t -> Handle.t -> Handle.t -> id -> Cstruct.buffer -> Overlapped.t -> bool = "ocaml_iocp_accept_bytes" "ocaml_iocp_accept"
 end
 
@@ -102,11 +104,13 @@ let with_id_full : type a. a t -> (Heap.ptr -> bool) -> a -> extra_data:'b -> a 
   
 (* let with_id t fn a = with_id_full t fn a ~extra_data:() *)
 
-let read_file t fd buf num_bytes data ol =
-  with_id_full t (fun id -> Iocp.read_file t.iocp fd id (Cstruct.to_bigarray buf) num_bytes ol) data ~extra_data:buf
+let read_fixed t fd buf ~off ~len data =
+  let ol = Overlapped.create ~off () in
+  with_id_full t (fun id -> Iocp.read_fixed t.iocp fd id (Cstruct.to_bigarray buf) len ol) data ~extra_data:buf
 
-let write_file t fd buf num_bytes data ol =
-  with_id_full t (fun id -> Iocp.write_file t.iocp fd id (Cstruct.to_bigarray buf) num_bytes ol) data ~extra_data:buf
+let write_fixed t fd buf ~off ~len data =
+  let ol = Overlapped.create ~off () in
+  with_id_full t (fun id -> Iocp.write_fixed t.iocp fd id (Cstruct.to_bigarray buf) len ol) data ~extra_data:buf
 
 let accept t fd acc buf data ol =
   let accept_buffer = Cstruct.to_bigarray buf in
