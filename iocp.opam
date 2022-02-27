@@ -11,6 +11,7 @@ bug-reports: "https://github.com/patricoferris/ocaml-iocp/issues"
 depends: [
   "dune" {>= "2.9"}
   "cstruct"
+  "optint"
   "mdx" {with-test}
   "odoc" {with-doc}
 ]

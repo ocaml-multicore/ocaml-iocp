@@ -181,13 +181,14 @@ value ocaml_iocp_get_queued_completion_status(value v_fd) {
     CAMLreturn(v);
 }
 
-value ocaml_iocp_read_fixed(value v_cp, value v_fd, value v_id, value v_ba, value v_num_bytes, value v_overlapped) {
+value ocaml_iocp_read(value v_cp, value v_fd, value v_id, value v_ba, value v_num_bytes, value v_off, value v_overlapped) {
     CAMLparam4(v_cp, v_fd, v_ba, v_overlapped);
     LPOVERLAPPED ol = Overlapped_val(v_overlapped);
 
     // Here we associate the file handle to the completion port handle...
+    void *buf = Caml_ba_data_val(v_ba) + Long_val(v_off);
     HANDLE _cp = CreateIoCompletionPort(Handle_val(v_fd), Handle_val(v_cp), Long_val(v_id), 0);
-    BOOL b = ReadFile(Handle_val(v_fd), Caml_ba_data_val(v_ba), Int_val(v_num_bytes), NULL, ol);
+    BOOL b = ReadFile(Handle_val(v_fd), buf, Int_val(v_num_bytes), NULL, ol);
 
     // The return value is non-zero (TRUE) on success. However, it is FALSE if the IO operation
     // is completing asynchronously. We change that behaviour by checking last error.
@@ -197,17 +198,18 @@ value ocaml_iocp_read_fixed(value v_cp, value v_fd, value v_id, value v_ba, valu
     CAMLreturn(Val_bool(b));
 }
 
-value ocaml_iocp_read_fixed_bytes(value* values, int argc) {
-    return ocaml_iocp_read_fixed(values[0], values[1], values[2], values[3], values[4], values[5]);
+value ocaml_iocp_read_bytes(value* values, int argc) {
+    return ocaml_iocp_read(values[0], values[1], values[2], values[3], values[4], values[5], values[6]);
 }
 
-value ocaml_iocp_write_fixed(value v_cp, value v_fd, value v_id, value v_ba, value v_num_bytes, value v_overlapped) {
+value ocaml_iocp_write(value v_cp, value v_fd, value v_id, value v_ba, value v_num_bytes, value v_off, value v_overlapped) {
     CAMLparam4(v_cp, v_fd, v_ba, v_overlapped);
     LPOVERLAPPED ol = Overlapped_val(v_overlapped);
 
     // Here we associate the file handle to the completion port handle...
+    void *buf = Caml_ba_data_val(v_ba) + Long_val(v_off);
     HANDLE _cp = CreateIoCompletionPort(Handle_val(v_fd), Handle_val(v_cp), Long_val(v_id), 0);
-    BOOL b = WriteFile(Handle_val(v_fd), Caml_ba_data_val(v_ba), Int_val(v_num_bytes), NULL, ol);
+    BOOL b = WriteFile(Handle_val(v_fd), buf, Int_val(v_num_bytes), NULL, ol);
 
     // The return value is non-zero (TRUE) on success. However, it is FALSE if the IO operation
     // is completing asynchronously. We change that behaviour by checking last error.
@@ -217,8 +219,8 @@ value ocaml_iocp_write_fixed(value v_cp, value v_fd, value v_id, value v_ba, val
     CAMLreturn(Val_bool(b));
 }
 
-value ocaml_iocp_write_fixed_bytes(value* values, int argc) {
-    return ocaml_iocp_write_fixed(values[0], values[1], values[2], values[3], values[4], values[5]);
+value ocaml_iocp_write_bytes(value* values, int argc) {
+    return ocaml_iocp_write(values[0], values[1], values[2], values[3], values[4], values[5], values[6]);
 }
 
 GUID GuidGetAddrAcceptEx = WSAID_GETACCEPTEXSOCKADDRS;

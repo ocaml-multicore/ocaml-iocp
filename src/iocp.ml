@@ -6,8 +6,10 @@
 module Overlapped = struct
   type t
 
-  external create : int -> t = "ocaml_iocp_make_overlapped"
-  let create ?(off = 0) () =
+  type offset = Optint.Int63.t
+
+  external create : offset -> t = "ocaml_iocp_make_overlapped"
+  let create ?(off = Optint.Int63.zero) () =
     create off
 end
 
@@ -59,8 +61,8 @@ module Iocp = struct
   (* external get_queue_completion_status_timeout : t -> int -> completion_status = "ocaml_iocp_get_queued_completion_status_timeout"  *)
 
   (* Operations *)
-  external read_fixed : t -> Handle.t -> id -> Cstruct.buffer -> int -> Overlapped.t -> bool = "ocaml_iocp_read_fixed_bytes" "ocaml_iocp_read_fixed"
-  external write_fixed : t -> Handle.t -> id -> Cstruct.buffer -> int -> Overlapped.t -> bool = "ocaml_iocp_write_fixed_bytes" "ocaml_iocp_write_fixed"
+  external read : t -> Handle.t -> id -> Cstruct.buffer -> int -> int -> Overlapped.t -> bool = "ocaml_iocp_read_bytes" "ocaml_iocp_read"
+  external write : t -> Handle.t -> id -> Cstruct.buffer -> int -> int -> Overlapped.t -> bool = "ocaml_iocp_write_bytes" "ocaml_iocp_write"
   external accept : t -> Handle.t -> Handle.t -> id -> Cstruct.buffer -> Overlapped.t -> bool = "ocaml_iocp_accept_bytes" "ocaml_iocp_accept"
 end
 
@@ -104,13 +106,13 @@ let with_id_full : type a. a t -> (Heap.ptr -> bool) -> a -> extra_data:'b -> a 
   
 (* let with_id t fn a = with_id_full t fn a ~extra_data:() *)
 
-let read_fixed t fd buf ~off ~len data =
-  let ol = Overlapped.create ~off () in
-  with_id_full t (fun id -> Iocp.read_fixed t.iocp fd id (Cstruct.to_bigarray buf) len ol) data ~extra_data:buf
+let read t ~file_offset fd buf ~off ~len data =
+  let ol = Overlapped.create ~off:file_offset () in
+  with_id_full t (fun id -> Iocp.read t.iocp fd id (Cstruct.to_bigarray buf) len off ol) data ~extra_data:buf
 
-let write_fixed t fd buf ~off ~len data =
-  let ol = Overlapped.create ~off () in
-  with_id_full t (fun id -> Iocp.write_fixed t.iocp fd id (Cstruct.to_bigarray buf) len ol) data ~extra_data:buf
+let write t ~file_offset fd buf ~off ~len data =
+  let ol = Overlapped.create ~off:file_offset () in
+  with_id_full t (fun id -> Iocp.write t.iocp fd id (Cstruct.to_bigarray buf) len off ol) data ~extra_data:buf
 
 let accept t fd acc buf data ol =
   let accept_buffer = Cstruct.to_bigarray buf in
