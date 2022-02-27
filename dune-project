@@ -12,5 +12,6 @@
  (description "Bindings to the Windows IOCP API. See https://github.com/ocaml-multicore/eio for a higher-level API using this.")
  (depends
    cstruct
+   optint
    (mdx :with-test)))
 (using mdx 0.1)

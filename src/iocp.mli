@@ -3,11 +3,13 @@
     Bindings to input/output completion ports (IOCP) allowing for efficient,
     asynchronous IO on Windows. *)
 
+type offset := Optint.Int63.t
+
 module Overlapped : sig
   type t
   (** An overlapped structure used for asynchronous IO. *)
 
-  val create : ?off:int -> unit -> t
+  val create : ?off:offset -> unit -> t
   (** An overlapped structure where the offset can be set (defaults to 0). *)
 end
 
@@ -58,14 +60,14 @@ val get_queued_completion_status : 'a t  -> 'a completion_status option
 (** [get_queued_completion_status t] will wait indefinitely for a completion packet to arrive 
     at the completion port [t]. *)
 
-val read_fixed : 'a t -> Handle.t -> Cstruct.t -> off:int -> len:int -> 'a -> 'a job option
-(** [read_fixed t fd buf off len d] reads [len] bytes of data from [fd] at a given offset [off]
-    using [t] as the completion port for the read request. [d] is the user associated data for 
-    the request. *)
+val read : 'a t -> file_offset:offset -> Handle.t -> Cstruct.t -> off:int -> len:int -> 'a -> 'a job option
+(** [read t ~file_offset fd buf ~off ~len d] reads [len] bytes of data from [fd] at a given absolute 
+    offset [file_offset] using [t] as the completion port for the read request. The data is read into [buf] at offset [off].
+    [d] is the user associated data for the request. *)
 
-val write_fixed  : 'a t -> Handle.t -> Cstruct.t -> off:int -> len:int -> 'a -> 'a job option
-(** [write_fixed t fd buf off len d] writes [len] bytes of data to [fd] at a given offset [off]
-    using [t] as the completion port for the write request. [d] is the user associated data for 
+val write  : 'a t -> file_offset:offset -> Handle.t -> Cstruct.t -> off:int -> len:int -> 'a -> 'a job option
+(** [write t ~file_offset fd buf ~off ~len d] writes [len] bytes of data to [fd] at a given absolute offset [file_offset]
+    using [t] as the completion port for the write request. Data is read from [buf] at offset [off]. [d] is the user associated data for 
     the request. *)
 
 (** {2 Networking} *)
