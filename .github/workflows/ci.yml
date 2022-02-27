@@ -1,7 +1,9 @@
 name: Windows CI
 on:
-  pull_request: [ main ]
-  push: [ main ]
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 jobs:
   build:
     strategy:
