@@ -1,5 +1,11 @@
 (executables
  (names copy net)
+ (modules copy net)
+ (libraries iocp))
+
+(test
+ (name pipe)
+ (modules pipe)
  (libraries iocp))
 
 (rule

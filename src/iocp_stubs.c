@@ -22,6 +22,7 @@
 #include <caml/bigarray.h>
 #include <caml/alloc.h>
 #include <caml/callback.h>
+#include <caml/signals.h>
 #include <caml/custom.h>
 #include <caml/memory.h>
 #include <caml/mlvalues.h>
@@ -35,6 +36,8 @@
 #include <Minwinbase.h>
 #include <Mswsock.h>
 #include <stdio.h>
+
+#define SIZEBUF 4096
 
 struct sock_addr_data {
   union sock_addr_union sock_addr_addr;
@@ -165,6 +168,7 @@ static value Val_completion_status(value v_id, value v_bytes, value v_ol) {
 value ocaml_iocp_get_queued_completion_status(value v_fd) {
     CAMLparam1(v_fd);
     CAMLlocal2(v, v_ol);
+    BOOL b;
     HANDLE fd = Handle_val(v_fd);
     LPOVERLAPPED ol;
     DWORD transferred = 0;
@@ -172,7 +176,9 @@ value ocaml_iocp_get_queued_completion_status(value v_fd) {
 
     ol = (LPOVERLAPPED) caml_stat_alloc(sizeof(OVERLAPPED));
     v_ol = caml_alloc_custom_mem(&overlapped_ops, sizeof(LPOVERLAPPED), sizeof(OVERLAPPED));
-    BOOL b = GetQueuedCompletionStatus(fd, &transferred, &ptr, &ol, INFINITE);
+    caml_enter_blocking_section();
+    b = GetQueuedCompletionStatus(fd, &transferred, &ptr, &ol, INFINITE);
+    caml_leave_blocking_section();
     if (!b) {
         printf("ERRR %i\n", GetLastError());
     }
@@ -387,6 +393,57 @@ enum { CLOEXEC = 1, KEEPEXEC = 2 };
 static int open_cloexec_flags[15] = {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, CLOEXEC, KEEPEXEC
 };
+
+CAMLprim value ocaml_iocp_unix_pipe(value v_path)
+{
+  CAMLparam1(v_path);
+  CAMLlocal2(readfd, writefd);
+  value res;
+  char *wpath = caml_strdup(String_val(v_path));
+
+  SECURITY_ATTRIBUTES attr;
+  attr.nLength = sizeof(attr);
+  attr.lpSecurityDescriptor = NULL;
+  attr.bInheritHandle = TRUE;
+
+  HANDLE pipeR = CreateNamedPipe(
+        TEXT(wpath), // name of the pipe
+        (PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED),
+        (PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT),
+        1, // only allow 1 instance of this pipe
+        SIZEBUF,
+        SIZEBUF,
+        PIPE_WAIT, // use default wait time
+        &attr // use default security attributes
+    );
+
+  if (pipeR == INVALID_HANDLE_VALUE || pipeR == NULL) {
+    win32_maperr(GetLastError());
+    uerror("CreateNamedPipe", "pipe");
+  }
+
+  HANDLE pipeW = CreateFile(
+        TEXT(wpath),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+        &attr);
+
+  if (pipeW == INVALID_HANDLE_VALUE || pipeW == NULL) {
+    printf("Write handle failed\n");
+    win32_maperr(GetLastError());
+    uerror("CreateNamedPipe", "pipe");
+  }
+
+  writefd = win_alloc_handle(pipeW);
+  readfd = win_alloc_handle(pipeR);
+  res = caml_alloc_small(2, 0);
+  Field(res, 0) = readfd;
+  Field(res, 1) = writefd;
+  CAMLreturn(res);
+}
 
 CAMLprim value ocaml_iocp_unix_open(value path, value flags, value perm)
 {

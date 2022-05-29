@@ -19,6 +19,11 @@ module Handle = struct
   type t = Unix.file_descr
   let to_unix t = t
   external openfile : string -> Unix.open_flag list -> Unix.file_perm -> t = "ocaml_iocp_unix_open"
+  external pipe' : string -> t * t = "ocaml_iocp_unix_pipe"
+
+  let pipe name =
+    let path = "\\\\.\\pipe\\" ^ name in
+    pipe' path
 
   let of_unix t = t
 end

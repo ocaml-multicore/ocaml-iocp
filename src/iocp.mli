@@ -22,6 +22,9 @@ module Handle : sig
     (** An exact copy {! Unix.openfile} except the [FILE_FLAG_OVERLAPPED] is added
         to the flags when opening the file. *)
 
+    val pipe : string -> t * t
+    (** [pipe name] creates a named pipe ready for asynchronous operations. *)
+
     val to_unix : t -> Unix.file_descr
     (** Converts a handle to a unix file-descriptor. Note you can also do type coercion too,
         such as [(fd :> Unix.file_descr)]. *)
