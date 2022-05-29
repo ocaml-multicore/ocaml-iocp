@@ -179,10 +179,14 @@ value ocaml_iocp_get_queued_completion_status(value v_fd) {
     caml_enter_blocking_section();
     b = GetQueuedCompletionStatus(fd, &transferred, &ptr, &ol, INFINITE);
     caml_leave_blocking_section();
-    if (!b) {
-        printf("ERRR %i\n", GetLastError());
+
+    if (!b && GetLastError() != ERROR_HANDLE_EOF) {
+      win32_maperr(GetLastError());
+      uerror("CreateNamedPipe", Nothing);
     }
+
     Overlapped_val(v_ol) = ol;
+    
     v = Val_completion_status(Val_int(ptr), Val_int(transferred), v_ol);
     CAMLreturn(v);
 }
@@ -191,11 +195,12 @@ value ocaml_iocp_read(value v_cp, value v_fd, value v_id, value v_ba, value v_nu
     CAMLparam4(v_cp, v_fd, v_ba, v_overlapped);
     LPOVERLAPPED ol = Overlapped_val(v_overlapped);
 
+    // printf("READ FILE %i %i %i\n", Handle_val(v_fd), Int_val(v_off), Int_val(v_num_bytes));
+
     // Here we associate the file handle to the completion port handle...
     void *buf = Caml_ba_data_val(v_ba) + Long_val(v_off);
     HANDLE _cp = CreateIoCompletionPort(Handle_val(v_fd), Handle_val(v_cp), Long_val(v_id), 0);
     BOOL b = ReadFile(Handle_val(v_fd), buf, Int_val(v_num_bytes), NULL, ol);
-
     // The return value is non-zero (TRUE) on success. However, it is FALSE if the IO operation
     // is completing asynchronously. We change that behaviour by checking last error.
     if (GetLastError() == ERROR_IO_PENDING) {
@@ -394,7 +399,7 @@ static int open_cloexec_flags[15] = {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, CLOEXEC, KEEPEXEC
 };
 
-CAMLprim value ocaml_iocp_unix_pipe(value v_path)
+value ocaml_iocp_unix_pipe(value v_path)
 {
   CAMLparam1(v_path);
   CAMLlocal2(readfd, writefd);
@@ -417,9 +422,11 @@ CAMLprim value ocaml_iocp_unix_pipe(value v_path)
         &attr // use default security attributes
     );
 
+  caml_stat_free(wpath);
+
   if (pipeR == INVALID_HANDLE_VALUE || pipeR == NULL) {
     win32_maperr(GetLastError());
-    uerror("CreateNamedPipe", "pipe");
+    uerror("CreateNamedPipe", Nothing);
   }
 
   HANDLE pipeW = CreateFile(
@@ -450,7 +457,7 @@ CAMLprim value ocaml_iocp_unix_open(value path, value flags, value perm)
   int fileaccess, createflags, fileattrib, filecreate, sharemode, cloexec;
   SECURITY_ATTRIBUTES attr;
   HANDLE h;
-  char *wpath;
+  wchar_t * wpath;
 
   caml_unix_check_path(path, "open");
   fileaccess = caml_convert_flag_list(flags, open_access_flags);
@@ -469,11 +476,6 @@ CAMLprim value ocaml_iocp_unix_open(value path, value flags, value perm)
   else
     filecreate = OPEN_EXISTING;
 
-  if ((createflags & O_CREAT) && (Int_val(perm) & 0200) == 0)
-    fileattrib = FILE_ATTRIBUTE_READONLY;
-  else
-    fileattrib = FILE_ATTRIBUTE_NORMAL;
-
   cloexec = caml_convert_flag_list(flags, open_cloexec_flags);
   attr.nLength = sizeof(attr);
   attr.lpSecurityDescriptor = NULL;
@@ -482,14 +484,15 @@ CAMLprim value ocaml_iocp_unix_open(value path, value flags, value perm)
                       : cloexec & KEEPEXEC ? TRUE
                                            : !unix_cloexec_default;
 
-  wpath = caml_strdup(String_val(path));
+  wpath = caml_stat_strdup(String_val(path));
   h = CreateFile(wpath, fileaccess,
                  sharemode, &attr,
-                 filecreate, fileattrib | FILE_FLAG_OVERLAPPED, NULL);
+                 filecreate, FILE_FLAG_OVERLAPPED, NULL);
   caml_stat_free(wpath);
   if (h == INVALID_HANDLE_VALUE) {
     win32_maperr(GetLastError());
     uerror("open", path);
   }
+
   return win_alloc_handle(h);
 }

@@ -10,6 +10,7 @@ let () =
     | None -> assert false
     | Some t ->
       assert (t.data = `R);
+      print_int t.bytes_transferred;
       let _job = Iocp.write iocp ~file_offset:Optint.Int63.zero out buf ~off:0 ~len:t.bytes_transferred `W in
       match Iocp.get_queued_completion_status iocp with
       | None -> assert false
