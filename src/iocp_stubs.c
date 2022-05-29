@@ -37,6 +37,8 @@
 #include <Mswsock.h>
 #include <stdio.h>
 
+#define SIZEBUF 4096
+
 struct sock_addr_data {
   union sock_addr_union sock_addr_addr;
   socklen_param_type sock_addr_len;
@@ -392,38 +394,45 @@ static int open_cloexec_flags[15] = {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, CLOEXEC, KEEPEXEC
 };
 
-CAMLprim value ocaml_iocp_unix_pipe(value v_unit)
+CAMLprim value ocaml_iocp_unix_pipe(value v_path)
 {
-  CAMLparam0();
+  CAMLparam1(v_path);
   CAMLlocal2(readfd, writefd);
   value res;
+  char *wpath = caml_strdup(String_val(v_path));
+
+  SECURITY_ATTRIBUTES attr;
+  attr.nLength = sizeof(attr);
+  attr.lpSecurityDescriptor = NULL;
+  attr.bInheritHandle = TRUE;
 
   HANDLE pipeR = CreateNamedPipe(
-        TEXT("\\\\.\\pipe\\Pipe"), // name of the pipe
+        TEXT(wpath), // name of the pipe
         (PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED),
         (PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT),
         1, // only allow 1 instance of this pipe
-        1024 * 16,
-        1024 * 16,
+        SIZEBUF,
+        SIZEBUF,
         PIPE_WAIT, // use default wait time
-        NULL // use default security attributes
+        &attr // use default security attributes
     );
 
-  if (pipeR == INVALID_HANDLE_VALUE) {
+  if (pipeR == INVALID_HANDLE_VALUE || pipeR == NULL) {
     win32_maperr(GetLastError());
     uerror("CreateNamedPipe", "pipe");
   }
 
   HANDLE pipeW = CreateFile(
-        TEXT("\\\\.\\pipe\\Pipe"),
+        TEXT(wpath),
         GENERIC_READ | GENERIC_WRITE,
-        0,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
         NULL,
         OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-        NULL);
+        &attr);
 
-  if (pipeW == INVALID_HANDLE_VALUE) {
+  if (pipeW == INVALID_HANDLE_VALUE || pipeW == NULL) {
+    printf("Write handle failed\n");
     win32_maperr(GetLastError());
     uerror("CreateNamedPipe", "pipe");
   }

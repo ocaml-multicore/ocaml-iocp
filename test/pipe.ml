@@ -1,6 +1,6 @@
 let () =
   let iocp = Iocp.create () in
-  let rfd, wfd = Iocp.Handle.pipe () in
+  let rfd, wfd = Iocp.Handle.pipe "iocpPipe" in
   let s = "Hello" in
   let buf = Cstruct.of_string s in
   print_endline ("Sending '" ^ s ^ "' over the pipe");
