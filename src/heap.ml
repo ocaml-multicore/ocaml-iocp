@@ -103,7 +103,8 @@
    (* We've marked this slot as free, so [t.data.(ptr)] is inaccessible. We zero
       it to allow it to be GC-ed. *)
    assert (t.free_tail_relation.(ptr) <> slot_taken);
-   t.data.(ptr) <- Empty;         (* Extra-data can be GC'd here *)
+   t.data.(ptr) <- Empty;
+   (* Extra-data can be GC'd here *)
    t.in_use <- t.in_use - 1;
  
    datum
