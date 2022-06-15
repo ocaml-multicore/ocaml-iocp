@@ -22,6 +22,15 @@ module Handle : sig
     (** An exact copy {! Unix.openfile} except the [FILE_FLAG_OVERLAPPED] is added
         to the flags when opening the file. *)
 
+    val cancel : t -> Overlapped.t -> unit
+    (** Cancels the pending IO operations for the handle and overlapped structure. *)
+
+    val shutdown : t -> Unix.shutdown_command -> unit
+    (** Same as {!Unix.shutdown} *)
+
+    val update_accept_ctx : t -> unit
+    val update_connect_ctx : t -> unit
+
     val pipe : string -> t * t
     (** [pipe name] creates a named pipe ready for asynchronous operations. *)
 
@@ -63,12 +72,15 @@ val get_queued_completion_status : 'a t  -> 'a completion_status option
 (** [get_queued_completion_status t] will wait indefinitely for a completion packet to arrive 
     at the completion port [t]. *)
 
-val read : 'a t -> file_offset:offset -> Handle.t -> Cstruct.t -> off:int -> len:int -> 'a -> 'a job option
+val peek : 'a t -> 'a completion_status option
+(** [peek t] is like {! get_queued_completion_status} but will not wait indefinitely. *)
+
+val read : 'a t -> file_offset:offset -> Handle.t -> Cstruct.t -> off:int -> len:int -> 'a -> Overlapped.t -> 'a job option
 (** [read t ~file_offset fd buf ~off ~len d] reads [len] bytes of data from [fd] at a given absolute 
     offset [file_offset] using [t] as the completion port for the read request. The data is read into [buf] at offset [off].
     [d] is the user associated data for the request. *)
 
-val write  : 'a t -> file_offset:offset -> Handle.t -> Cstruct.t -> off:int -> len:int -> 'a -> 'a job option
+val write  : 'a t -> file_offset:offset -> Handle.t -> Cstruct.t -> off:int -> len:int -> 'a -> Overlapped.t -> 'a job option
 (** [write t ~file_offset fd buf ~off ~len d] writes [len] bytes of data to [fd] at a given absolute offset [file_offset]
     using [t] as the completion port for the write request. Data is read from [buf] at offset [off]. [d] is the user associated data for 
     the request. *)
@@ -96,3 +108,9 @@ val accept : 'a t -> Handle.t -> Handle.t -> Accept_buffer.t -> 'a -> Overlapped
     
     For more information, {{: https://docs.microsoft.com/en-us/windows/win32/api/mswsock/nf-mswsock-acceptex#parameters}
     the Microsoft documentation explains the parameters}.*)
+
+val connect : 'a t -> Handle.t -> Unix.sockaddr -> 'a -> Overlapped.t -> 'a job option
+
+val send : 'a t -> Handle.t -> Cstruct.t list -> 'a -> Overlapped.t -> 'a job option
+
+val recv : 'a t -> Handle.t -> Cstruct.t list -> 'a -> Overlapped.t -> 'a job option

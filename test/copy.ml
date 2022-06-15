@@ -15,6 +15,7 @@ let () =
       match Iocp.get_queued_completion_status iocp with
       | None -> assert false
       | Some t ->
+        print_endline "All done!";
         assert (t.data = `W);
         Unix.close (fd :> Unix.file_descr);
         Unix.close (out :> Unix.file_descr)

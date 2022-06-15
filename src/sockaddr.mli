@@ -19,5 +19,6 @@
 (** Holder for the peer's address in {!accept}. *)
 type t
 
+val of_unix : Unix.sockaddr -> t 
 val create : unit -> t
 val get : t -> Unix.sockaddr
