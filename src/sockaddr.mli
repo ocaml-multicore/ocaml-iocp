@@ -16,9 +16,9 @@
 
 (* Borrowed from the IO_URING bindings *)
 
-(** Holder for the peer's address in {!accept}. *)
 type t
+(** Holder for the peer's address in {!accept}. *)
 
-val of_unix : Unix.sockaddr -> t 
+val of_unix : Unix.sockaddr -> t
 val create : unit -> t
 val get : t -> Unix.sockaddr

@@ -1,7 +1,6 @@
 (lang dune 2.9)
 (name iocp)
 (generate_opam_files true)
-(formatting disabled)
 (source (github patricoferris/ocaml-iocp))
 (license "MIT")
 (authors "Patrick Ferris")

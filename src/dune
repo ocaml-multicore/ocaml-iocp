@@ -3,5 +3,5 @@
  (public_name iocp)
  (libraries unix cstruct optint)
  (foreign_stubs
-   (language c)
-   (names iocp_stubs)))
+  (language c)
+  (names iocp_stubs)))

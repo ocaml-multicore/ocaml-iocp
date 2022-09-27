@@ -20,5 +20,4 @@ external of_unix : Unix.sockaddr -> t = "ocaml_iocp_make_sockaddr"
 external get : t -> Unix.sockaddr = "ocaml_iocp_extract_sockaddr"
 
 let dummy_addr = Unix.ADDR_UNIX "-"
-
 let create () = of_unix dummy_addr
