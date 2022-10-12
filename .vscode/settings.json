@@ -1,3 +1,6 @@
 {
     "files.eol": "\n",
+    "ocaml.sandbox": {
+        "kind": "global"
+    },
 }

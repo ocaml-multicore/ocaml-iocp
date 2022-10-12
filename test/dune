@@ -1,6 +1,6 @@
 (executables
- (names copy net)
- (modules copy net)
+ (names copy net safe_net)
+ (modules copy net safe_net)
  (libraries iocp))
 
 (test
@@ -8,12 +8,19 @@
  (modules pipe)
  (libraries iocp))
 
+(executable
+ (name t1)
+ (modules t1)
+ (libraries iocp alcotest threads))
+
 (rule
  (alias runtest)
  (deps ./test.md)
  (target ./test.out)
- (action (run ./copy.exe ./test.md ./test.out)))
+ (action
+  (run ./copy.exe ./test.md ./test.out)))
 
 (rule
  (alias runtest)
- (action (diff test.md test.out)))
+ (action
+  (run ./t1.exe)))

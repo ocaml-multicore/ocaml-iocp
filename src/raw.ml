@@ -71,19 +71,21 @@ external write :
   [@@noalloc]
 
 external accept :
-  t -> Handle.t -> Handle.t -> id -> Cstruct.buffer -> 'a Overlapped.t -> bool
-  = "ocaml_iocp_accept_bytes" "ocaml_iocp_accept"
+  Handle.t -> Handle.t  -> Cstruct.buffer -> 'a Overlapped.t -> unit
+  = "ocaml_iocp_accept"
   [@@noalloc]
 
 external connect :
-  t -> Handle.t -> Sockaddr.t -> id -> 'a Overlapped.t -> bool
+  t -> Handle.t -> Sockaddr.t -> 'a Overlapped.t -> unit
   = "ocaml_iocp_connect"
   [@@noalloc]
 
-(* external send : t -> Handle.t -> Wsabuf.t -> id -> 'a Overlapped.t -> bool
+external send : t -> Handle.t -> Wsabuf.t -> 'a Overlapped.t -> unit
   = "ocaml_iocp_send"
   [@@noalloc]
 
-external recv : t -> Handle.t -> Wsabuf.t -> id -> 'a Overlapped.t -> bool
+external recv : t -> Handle.t -> Wsabuf.t  -> 'a Overlapped.t -> unit
   = "ocaml_iocp_recv"
-  [@@noalloc] *)
+  [@@noalloc]
+
+external cancel : Handle.t -> 'a Overlapped.t -> unit = "ocaml_iocp_cancel" [@@noalloc]

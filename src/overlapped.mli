@@ -22,6 +22,9 @@ external set_offset : 'a t -> offset -> unit = "ocaml_iocp_set_overlapped_off"
 external set_key : 'a t -> 'a -> unit = "ocaml_iocp_set_overlapped_key"
 (** Sets the key *)
 
+val get_key : 'a t -> 'a
+(** Gets the key *)
+
 val id : 'a t -> int
 (** [id v] returns the id of v. The id is an integer that uniquely specifies the
     OVERLAPPED structure and is returned in the {Iocp.Raw.completion_status}

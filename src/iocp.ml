@@ -3,43 +3,13 @@
    Distributed under the MIT license. See terms at the end of this file.
   ----------------------------------------------------------------------*)
 
-module Wsabuf = struct
-  (* type wsabuf *)
-  (* type t = wsabuf * int * Cstruct.t list *)
-(* 
-  external create : Cstruct.t list -> int -> wsabuf = "ocaml_iocp_make_wsabuf" *)
-
-  (* let create bufs =
-    let len = List.length bufs in
-    (create bufs len, len, bufs) *)
-end
-
+module Wsabuf = Wsabuf
 module Sockaddr = Sockaddr
-
 module Handle = Handle
 module Overlapped = Overlapped
 module Raw = Raw
 module Safest = Safest
-
-(* AcceptEx only puts data (like the remote address) in a special buffer that needs to
-   be parsed by [GetAcceptExSockaddrs]. We don't care about the first message received
-   so we don't need that much space in the buffer. *)
-module Accept_buffer = struct
-  type t = Cstruct.t
-
-  external get_remote : Cstruct.buffer -> Handle.t -> Sockaddr.t -> unit
-    = "ocaml_iocp_get_accept_ex_sockaddr"
-
-  let get_remote t h =
-    let s = Sockaddr.create () in
-    get_remote (Cstruct.to_bigarray t) h s;
-    s
-
-  let create () =
-    (* TODO: get sizeof(sock_addr_union) to work the size out properly *)
-    let buf = Cstruct.create 256 in
-    buf
-end
+module Accept_buffer = Accept_buffer
 
 type 'a t = {
   id : < >;

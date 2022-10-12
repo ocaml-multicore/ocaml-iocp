@@ -28,6 +28,27 @@ let pipe () =
           Unix.close (Iocp.Handle.fd rfd);
           Unix.close (Iocp.Handle.fd wfd))
 
+let cancel () =
+  let iocp = Iocp.Raw.create_io_completion_port 10 in
+  let rfd, _wfd = Iocp.Raw.pipe iocp 1 2 "iocpPipeCancel" in
+  let buf' = Cstruct.create 100 in
+  let ol = Iocp.Overlapped.create ~off:Optint.Int63.zero () in
+  let ol_id = Iocp.Overlapped.id ol in
+  let () =
+    Iocp.Raw.read iocp rfd (Cstruct.to_bigarray buf') 100 0
+      ol
+  in
+  match Iocp.Raw.get_queued_completion_status iocp 100 with
+  | Cs_some _ -> assert false
+  | Cs_none ->
+    Iocp.Raw.cancel rfd ol;
+    match Iocp.Raw.get_queued_completion_status iocp 100 with
+    | Cs_none -> assert false
+    | Cs_some t ->
+      assert (t.overlapped_id = ol_id);
+      Format.eprintf "got error: %s" (match t.error with | None -> "None" | Some e -> Unix.error_message e);
+      ()
+  
 let write_read () =
   let iocp = Iocp.Raw.create_io_completion_port 10 in
   let filename = "test_file_1.txt" in
@@ -275,23 +296,49 @@ let safest () =
   Format.eprintf "buf='%s' buf2='%s'\n%!" (Cstruct.to_string buf) (Cstruct.to_string buf2);
   assert (Cstruct.equal buf buf2)
 
-   let () =
-     let open Alcotest in
-     run "IOCP" [
-         "singlethread", [
-             test_case "pipe"`Quick pipe;
-             test_case "write_read" `Quick write_read;
-             test_case "check_key" `Quick check_key;
-             test_case "safest" `Quick safest;
-           ];
-         "errors", [
-           test_case "non_overlapped" `Quick error_non_overlapped;
-           test_case "out_of_bounds" `Quick error_out_of_bounds];
-         "multicore", [
-           test_case "multicore_1" `Quick (multicore_read 1);
-           test_case "multicore_2" `Quick (multicore_read 2);
-           test_case "multicore_3" `Quick (multicore_read 3);
-           test_case "multicore_4" `Quick (multicore_read 4);
-           test_case "multicore_unsafe" `Quick multicore_read_unsafe
-         ]
-       ]
+
+  let listening_sock iocp =
+    let addr = Unix.(ADDR_INET (Unix.inet_addr_loopback, 8889)) in
+    let sock = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
+    Unix.bind sock addr;
+    Unix.listen sock 0;
+    let sock_accept = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
+    Unix.setsockopt sock SO_REUSEADDR true;
+    Iocp.Safest.handle_of_fd iocp sock 1, Iocp.Safest.handle_of_fd iocp sock_accept 2
+  
+  let listen () =
+    let iocp = Iocp.Safest.create 5 in
+    let sock, sock_accept = listening_sock iocp in
+    Format.eprintf "Got an accepting socket\n%!";
+    let addr_buf = Iocp.Accept_buffer.create () in
+    let id = Iocp.Safest.accept iocp sock sock_accept addr_buf in
+    id,iocp
+
+let gc_test () =
+  let _ = listen () in
+  Gc.full_major ();
+  ()
+
+let () =
+  let open Alcotest in
+  run "IOCP" [
+      "singlethread", [
+          test_case "pipe"`Quick pipe;
+          test_case "write_read" `Quick write_read;
+          test_case "check_key" `Quick check_key;
+          (* test_case "safest" `Quick safest; *)
+          test_case "cancel" `Quick cancel;
+          test_case "gc_before_more_tests" `Quick Gc.full_major;
+          test_case "gc" `Quick gc_test;
+        ];
+      "errors", [
+        test_case "non_overlapped" `Quick error_non_overlapped;
+        test_case "out_of_bounds" `Quick error_out_of_bounds];
+      "multicore", [
+        test_case "multicore_1" `Quick (multicore_read 1);
+        test_case "multicore_2" `Quick (multicore_read 2);
+        test_case "multicore_3" `Quick (multicore_read 3);
+        test_case "multicore_4" `Quick (multicore_read 4);
+        test_case "multicore_unsafe" `Quick multicore_read_unsafe
+      ]
+    ]

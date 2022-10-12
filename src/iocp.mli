@@ -3,6 +3,7 @@
     Bindings to input/output completion ports (IOCP) allowing for efficient,
     asynchronous IO on Windows. *)
 
+module Wsabuf = Wsabuf
 module Overlapped = Overlapped
 module Handle = Handle
 module Raw = Raw
@@ -72,7 +73,7 @@ module Sockaddr = Sockaddr
 
 (** An accept buffer is used to store information from a connection upon being accepted *)
 module Accept_buffer : sig
-  type t
+  type t = Cstruct.t
   (** An accept buffer *)
 
   val create : unit -> t
