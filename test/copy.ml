@@ -1,6 +1,19 @@
 type req = [ `R | `W ]
 
+let usage () =
+  Printf.fprintf stderr {|
+Usage:
+  %s <source filename> <destination filename>
+    -- copy <source filename> to <destination filename>
+  |} (Filename.basename Sys.argv.(0))
+
 let () =
+  if Array.length Sys.argv <> 3 then begin
+    Printf.fprintf stderr "Please supply source and destination filenames\n";
+    usage();
+    exit(-1);
+  end;
+
   let iocp = Iocp.create () in
   let fd = Iocp.openfile iocp 0 Sys.argv.(1) [ O_RDONLY ] 0 in
   let out =
