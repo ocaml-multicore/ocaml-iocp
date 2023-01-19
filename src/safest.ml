@@ -65,6 +65,8 @@ let get_overlapped v fd root =
     Format.eprintf "Found an overlapped: id=%d external_key=%d internal_key=%d\n%!" id external_key key;
     ol, external_key
 
+let openfile t = Raw.openfile t.iocp
+
 let read : t -> Handle.t -> Cstruct.buffer -> pos:int -> len:int -> off:Optint.Int63.t -> Id.t =
   fun v fd buf ~pos ~len ~off ->
     let root = ReadWrite buf in
