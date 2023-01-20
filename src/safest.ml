@@ -36,7 +36,7 @@ let create ?(overlapped = 1024) n =
   let allocated_overlapped = Array.init overlapped (fun i -> Overlapped.create i) in
   let external_keys = Array.init overlapped (fun _ -> -1) in
   let unused_overlapped = Array.to_list allocated_overlapped in
-  Format.eprintf "All created\n%!";
+  (* Format.eprintf "All created\n%!"; *)
   { iocp = Raw.create_io_completion_port n
   ; m = Mutex.create ()
   ; in_flight = H.create 255
@@ -53,7 +53,7 @@ let get_overlapped v fd root =
   match v.unused_overlapped with
   | [] -> Mutex.unlock v.m; raise Out_of_overlapped
   | ol :: ols ->
-    Format.eprintf "Getting overlapped\n%!";
+    (* Format.eprintf "Getting overlapped\n%!"; *)
     let id = Overlapped.id ol in
     let external_key = v.external_key in
     let key = Overlapped.get_key ol in
@@ -62,7 +62,7 @@ let get_overlapped v fd root =
     v.unused_overlapped <- ols;
     H.replace v.in_flight id (fd, ol, root, external_key);
     Mutex.unlock v.m;
-    Format.eprintf "Found an overlapped: id=%d external_key=%d internal_key=%d\n%!" id external_key key;
+    (* Format.eprintf "Found an overlapped: id=%d external_key=%d internal_key=%d\n%!" id external_key key; *)
     ol, external_key
 
 let openfile t = Raw.openfile t.iocp
@@ -133,12 +133,12 @@ let connect : t -> Handle.t -> Sockaddr.t -> Id.t =
 let garbage = Atomic.make []
 
 let finaliser v =
-  Format.eprintf "Finaliser for Safest.t\n%!";
+  (* Format.eprintf "Finaliser for Safest.t\n%!"; *)
   H.iter (fun _ (fd, ol, _, _) ->
     Format.eprintf "Cancelling somthing\n%!";
     Raw.cancel fd ol) v.in_flight;
   let rec loop () =
-    if (H.length v.in_flight = 0) then (Format.eprintf "All done\n%!") else begin
+    if (H.length v.in_flight = 0) then ( (*Format.eprintf "All done\n%!" *) ()) else begin
       Format.eprintf "Something to wait for\n%!";
       match get_queued_completion_status v ~timeout:100 with
       | None ->

@@ -1,12 +1,17 @@
 (executables
  (names copy net safe_net)
  (modules copy net safe_net)
- (libraries iocp))
+ (libraries iocp copy_lib))
 
 (library
  (name lwtcp_lib)
  (modules lwtcp_lib)
  (libraries lwt.unix logs))
+
+(library
+ (name copy_lib)
+ (modules copy_lib)
+ (libraries iocp))
 
 (test
  (name pipe)
@@ -33,7 +38,7 @@
 (executable
  (name cptest)
  (modules cptest)
- (libraries lwtcp_lib bechamel bechamel.monotonic_clock bechamel_csv))
+ (libraries lwtcp_lib copy_lib bechamel bechamel.monotonic_clock bechamel_csv))
 
 (rule
  (alias runbenchmark)

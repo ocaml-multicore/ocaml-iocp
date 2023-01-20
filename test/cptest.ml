@@ -53,7 +53,10 @@ let test_block_size impl =
 let lwt_bytes_test =
   Test.make_grouped ~name:"lwt_bytes" (List.map (fun l -> l Lwtcp_lib.run_cp) [test_size; test_queue_depth; test_block_size])
 
-let test = Test.make_grouped ~name:"cp" [  lwt_bytes_test; ]
+let iocp_test =
+  Test.make_grouped ~name:"iocp" (List.map (fun l -> l Copy_lib.run_cp) [test_size; test_queue_depth; test_block_size])
+
+let test = Test.make_grouped ~name:"cp" [ iocp_test; lwt_bytes_test ]
 
 let benchmark () =
   let ols = Analyze.ols ~bootstrap:0 ~r_square:true ~predictors:Measure.[| run |] in
