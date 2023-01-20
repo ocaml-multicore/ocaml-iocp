@@ -3,6 +3,11 @@
  (modules copy net safe_net)
  (libraries iocp))
 
+(library
+ (name lwtcp_lib)
+ (modules lwtcp_lib)
+ (libraries lwt.unix logs))
+
 (test
  (name pipe)
  (modules pipe)
@@ -24,3 +29,14 @@
  (alias runtest)
  (action
   (run ./t1.exe)))
+
+(executable
+ (name cptest)
+ (modules cptest)
+ (libraries lwtcp_lib bechamel bechamel.monotonic_clock bechamel_csv))
+
+(rule
+ (alias runbenchmark)
+ (action
+  (run ./cptest.exe)))
+
