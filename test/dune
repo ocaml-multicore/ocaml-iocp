@@ -1,7 +1,7 @@
 (executables
  (names copy net safe_net)
  (modules copy net safe_net)
- (libraries iocp copy_lib))
+ (libraries iocp copy_lib latency))
 
 (library
  (name lwtcp_lib)
@@ -11,7 +11,12 @@
 (library
  (name copy_lib)
  (modules copy_lib)
- (libraries iocp))
+ (libraries iocp mtime.clock.os latency))
+
+(library
+ (name latency)
+ (modules latency)
+ (libraries))
 
 (test
  (name pipe)
