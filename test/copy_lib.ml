@@ -1,3 +1,4 @@
+module IM = Iocp.Managed
 
 type req = [ `R | `W ]
 
@@ -13,21 +14,21 @@ type request = {
 let num_threads = 0
 
 let copy_file block_size queue_depth infile outfile =
-  let iocp = Iocp.Safest.create num_threads in
-  let fd = Iocp.Safest.openfile iocp 0 infile [ O_RDONLY ] 0 in
+  let iocp = IM.create num_threads in
+  let fd = IM.openfile iocp 0 infile [ O_RDONLY ] 0 in
   let out =
-    Iocp.Safest.openfile iocp 1 outfile [ O_WRONLY; O_CREAT; O_TRUNC ] 0o644
+    IM.openfile iocp 1 outfile [ O_WRONLY; O_CREAT; O_TRUNC ] 0o644
   in
   let st_size = Optint.Int63.of_int (Unix.fstat @@ Iocp.Handle.fd fd).Unix.st_size in
-  let in_progress_requests = Iocp.Safest.H.create queue_depth in
+  let in_progress_requests = IM.H.create queue_depth in
 
   (* Submit initial requests *)
   let rec submit_initial_requests next_read_off num_in_flight =
     if Optint.Int63.compare next_read_off st_size < 0 && num_in_flight < queue_depth then begin
       let buf = Cstruct.(to_bigarray @@ create block_size) in
       (* Printf.fprintf stderr "initial submit off=%d in_flight_requests = %d\n" (Optint.Int63.to_int next_read_off) num_in_flight; *)
-      let id = Iocp.Safest.read iocp fd buf ~pos:0 ~off:next_read_off ~len:block_size in
-      Iocp.Safest.H.replace in_progress_requests id {
+      let id = IM.read iocp fd buf ~pos:0 ~off:next_read_off ~len:block_size in
+      IM.H.replace in_progress_requests id {
         buf = buf;
         off = next_read_off;
         req = `R;
@@ -39,23 +40,23 @@ let copy_file block_size queue_depth infile outfile =
   let rec handle_completion next_read_off num_in_flight =
     (* Printf.fprintf stderr "waiting for %d\n" num_in_flight; *)
     if num_in_flight > 0 then begin
-      match Iocp.Safest.get_queued_completion_status iocp ~timeout:1000 with
+      match IM.get_queued_completion_status iocp ~timeout:1000 with
       | None -> assert false (* TODO: should we wait forever? *)
       | Some t ->
-        let request = Iocp.Safest.H.find in_progress_requests t.id in
-        Iocp.Safest.H.remove in_progress_requests t.id;
+        let request = IM.H.find in_progress_requests t.id in
+        IM.H.remove in_progress_requests t.id;
         begin match request.req with
         | `R ->
           (* Printf.fprintf stderr "read completed at %d\n" (Optint.Int63.to_int request.off); *)
-          let id = Iocp.Safest.write iocp out request.buf ~pos:0 ~off:request.off ~len:t.bytes_transferred in
-          Iocp.Safest.H.replace in_progress_requests id { request with req = `W };
+          let id = IM.write iocp out request.buf ~pos:0 ~off:request.off ~len:t.bytes_transferred in
+          IM.H.replace in_progress_requests id { request with req = `W };
           handle_completion next_read_off num_in_flight
         | `W ->
           (* Printf.fprintf stderr "write completed at %d\n" (Optint.Int63.to_int request.off); *)
           if Optint.Int63.compare next_read_off st_size < 0 then begin
             let buf = Cstruct.(to_bigarray @@ create block_size) in
-            let id = Iocp.Safest.read iocp fd buf ~pos:0 ~off:next_read_off ~len:block_size in
-            Iocp.Safest.H.replace in_progress_requests id {
+            let id = IM.read iocp fd buf ~pos:0 ~off:next_read_off ~len:block_size in
+            IM.H.replace in_progress_requests id {
               buf = buf;
               off = next_read_off;
               req = `R;

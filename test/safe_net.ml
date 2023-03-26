@@ -14,48 +14,48 @@ let listening_sock iocp =
   Unix.setsockopt sock SO_REUSEADDR true;
   print_sockaddr addr;
   (* Unix.setsockopt sock SO_REUSEPORT true; *)
-  Iocp.Safest.handle_of_fd iocp sock 1, Iocp.Safest.handle_of_fd iocp sock_accept 2
+  Iocp.Managed.handle_of_fd iocp sock 1, Iocp.Managed.handle_of_fd iocp sock_accept 2
 
 let listen () =
-  let iocp = Iocp.Safest.create 5 in
+  let iocp = Iocp.Managed.create 5 in
   let sock, sock_accept = listening_sock iocp in
   Format.eprintf "Got an accepting socket\n%!";
   let addr_buf = Iocp.Accept_buffer.create () in
-  let id = Iocp.Safest.accept iocp sock sock_accept addr_buf in
+  let id = Iocp.Managed.accept iocp sock sock_accept addr_buf in
   Format.eprintf "Called accept\n%!";
-  match Iocp.Safest.get_queued_completion_status iocp ~timeout:1000 with
+  match Iocp.Managed.get_queued_completion_status iocp ~timeout:1000 with
   | None -> assert false
   | Some t ->
-    assert (Iocp.Safest.Id.equal t.id id);
+    assert (Iocp.Managed.Id.equal t.id id);
     let client_addr = Iocp.Accept_buffer.get_remote addr_buf sock in
     print_sockaddr @@ Iocp.Sockaddr.get client_addr;
     let buf = Cstruct.create 4096 in
-    let id2 = Iocp.Safest.recv iocp sock_accept [buf] in
-    match Iocp.Safest.get_queued_completion_status iocp ~timeout:1000 with
+    let id2 = Iocp.Managed.recv iocp sock_accept [buf] in
+    match Iocp.Managed.get_queued_completion_status iocp ~timeout:1000 with
     | None -> assert false
     | Some t ->
-      assert (Iocp.Safest.Id.equal t.id id2);
+      assert (Iocp.Managed.Id.equal t.id id2);
       print_endline (Cstruct.to_string buf)
 
 let connect () =
-  let iocp = Iocp.Safest.create 4 in
+  let iocp = Iocp.Managed.create 4 in
   let addr = Unix.(ADDR_INET (host, port)) in
   let sock = Unix.socket Unix.PF_INET Unix.SOCK_STREAM 0 in
   Unix.bind sock (ADDR_INET (Unix.inet_addr_any, 0)); 
-  let sock = Iocp.Safest.handle_of_fd iocp sock 3 in
-  let id = Iocp.Safest.connect iocp sock (Iocp.Sockaddr.of_unix addr) in
-  match Iocp.Safest.get_queued_completion_status iocp ~timeout:1000 with
+  let sock = Iocp.Managed.handle_of_fd iocp sock 3 in
+  let id = Iocp.Managed.connect iocp sock (Iocp.Sockaddr.of_unix addr) in
+  match Iocp.Managed.get_queued_completion_status iocp ~timeout:1000 with
   | None -> assert false
   | Some t ->
-    assert (Iocp.Safest.Id.equal t.id id);
+    assert (Iocp.Managed.Id.equal t.id id);
     print_endline "Connected! Now sending data...";
     let buf = Cstruct.of_string "Hello socket!" in
-    let id2 = Iocp.Safest.send iocp sock [buf] in
+    let id2 = Iocp.Managed.send iocp sock [buf] in
     print_endline "Data queued up...";
-    match Iocp.Safest.get_queued_completion_status iocp ~timeout:1000 with
+    match Iocp.Managed.get_queued_completion_status iocp ~timeout:1000 with
     | None -> assert false
     | Some t ->
-      assert (Iocp.Safest.Id.equal t.id id2);
+      assert (Iocp.Managed.Id.equal t.id id2);
       print_endline "All done!"
     
 

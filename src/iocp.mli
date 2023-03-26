@@ -7,7 +7,7 @@ module Wsabuf = Wsabuf
 module Overlapped = Overlapped
 module Handle = Handle
 module Raw = Raw
-module Safest = Safest
+module Managed = Managed
 
 type 'a t
 (** A completion port that passes key data of type ['a]. *)

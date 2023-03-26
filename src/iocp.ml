@@ -8,7 +8,7 @@ module Sockaddr = Sockaddr
 module Handle = Handle
 module Overlapped = Overlapped
 module Raw = Raw
-module Safest = Safest
+module Managed = Managed
 module Accept_buffer = Accept_buffer
 
 type 'a t = {
