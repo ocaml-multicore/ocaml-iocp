@@ -13,11 +13,6 @@
  (modules copy_lib)
  (libraries iocp))
 
-(test
- (name pipe)
- (modules pipe)
- (libraries iocp))
-
 (executable
  (name t1)
  (modules t1)
