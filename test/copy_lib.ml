@@ -16,9 +16,7 @@ let num_threads = 0
 let copy_file block_size queue_depth infile outfile =
   let iocp = IM.create num_threads in
   let fd = IM.openfile iocp 0 infile [ O_RDONLY ] 0 in
-  let out =
-    IM.openfile iocp 1 outfile [ O_WRONLY; O_CREAT; O_TRUNC ] 0o644
-  in
+  let out = IM.openfile iocp 1 outfile [ O_WRONLY; O_CREAT; O_TRUNC ] 0o644 in
   let st_size = Optint.Int63.of_int (Unix.fstat @@ Iocp.Handle.fd fd).Unix.st_size in
   let in_progress_requests = IM.H.create queue_depth in
 
