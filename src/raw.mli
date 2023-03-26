@@ -37,7 +37,7 @@ type unsafe_completion_status = private {
 
 external get_queued_completion_status_unsafe :
   t -> int -> unsafe_completion_status -> unit
-  = "ocaml_iocp_get_queued_completion_status_unsafe" [@@noalloc]
+  = "ocaml_iocp_get_queued_completion_status_unsafe"
 
 val make_unsafe_completion_status : unit -> unsafe_completion_status
 
@@ -45,22 +45,19 @@ val make_unsafe_completion_status : unit -> unsafe_completion_status
 external read :
   t -> Handle.t -> Cstruct.buffer -> int -> int -> 'a Overlapped.t -> unit
   = "ocaml_iocp_read_bytes" "ocaml_iocp_read"
-  [@@noalloc]
 
 external write :
   t -> Handle.t -> Cstruct.buffer -> int -> int -> 'a Overlapped.t -> unit
   = "ocaml_iocp_write_bytes" "ocaml_iocp_write"
-  [@@noalloc]
 
 external accept :
   Handle.t -> Handle.t -> Cstruct.buffer -> 'a Overlapped.t -> unit
   = "ocaml_iocp_accept"
-  [@@noalloc]
 
 external connect :
   t -> Handle.t -> Sockaddr.t -> 'a Overlapped.t -> unit
   = "ocaml_iocp_connect"
-  [@@noalloc]
-external send : t -> Handle.t -> Wsabuf.t -> 'a Overlapped.t -> unit = "ocaml_iocp_send" [@@noalloc]
-external recv : t -> Handle.t -> Wsabuf.t -> 'a Overlapped.t -> unit = "ocaml_iocp_recv" [@@noalloc] 
-external cancel : Handle.t -> 'a Overlapped.t -> unit = "ocaml_iocp_cancel" [@@noalloc]
+
+  external send : t -> Handle.t -> Wsabuf.t -> 'a Overlapped.t -> unit = "ocaml_iocp_send"
+external recv : t -> Handle.t -> Wsabuf.t -> 'a Overlapped.t -> unit = "ocaml_iocp_recv"
+external cancel : Handle.t -> 'a Overlapped.t -> unit = "ocaml_iocp_cancel"
