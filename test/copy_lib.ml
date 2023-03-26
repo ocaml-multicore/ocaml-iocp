@@ -1,4 +1,4 @@
-module IM = Iocp.Managed
+module IM = Iocp
 
 type req = [ `R | `W ]
 
@@ -40,7 +40,7 @@ let copy_file block_size queue_depth infile outfile =
   let rec handle_completion next_read_off num_in_flight =
     (* Printf.fprintf stderr "waiting for %d\n" num_in_flight; *)
     if num_in_flight > 0 then begin
-      match IM.get_queued_completion_status iocp ~timeout:1000 with
+      match IM.completion_status iocp ~timeout:1000 with
       | None -> assert false (* TODO: should we wait forever? *)
       | Some t ->
         let request = IM.H.find in_progress_requests t.id in

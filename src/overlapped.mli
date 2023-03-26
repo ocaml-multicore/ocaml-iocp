@@ -3,7 +3,7 @@
     cancellation. *)
 
 type 'a t
-(** An ocaml value [v] of type [t] represents a windows OVERLAPPED structure that has been
+(** An OCaml value [v] of type [t] represents a Windows OVERLAPPED structure that has been
     allocated out of heap. When [v] is garbage collected the OVERLAPPED structure will
     be freed, so it is important to ensure the value is alive for the entire duration
     of an asynchronous IO operation. *)

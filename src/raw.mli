@@ -58,6 +58,6 @@ external connect :
   t -> Handle.t -> Sockaddr.t -> 'a Overlapped.t -> unit
   = "ocaml_iocp_connect"
 
-  external send : t -> Handle.t -> Wsabuf.t -> 'a Overlapped.t -> unit = "ocaml_iocp_send"
+external send : t -> Handle.t -> Wsabuf.t -> 'a Overlapped.t -> unit = "ocaml_iocp_send"
 external recv : t -> Handle.t -> Wsabuf.t -> 'a Overlapped.t -> unit = "ocaml_iocp_recv"
 external cancel : Handle.t -> 'a Overlapped.t -> unit = "ocaml_iocp_cancel"

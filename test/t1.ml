@@ -1,4 +1,4 @@
-module IM = Iocp.Managed
+module IM = Iocp
 
 let pipe () =
   let iocp = Iocp.Raw.create_io_completion_port 10 in
@@ -271,30 +271,30 @@ let error_out_of_bounds () =
 
 
 let safest () =
-  let iocp = IM.create 10 in
+  let iocp = Iocp.create 10 in
   let filename = "test_file_3.txt" in
   let handle =
-    Iocp.Raw.openfile iocp.iocp 1 filename Unix.[ O_CREAT; O_RDWR; O_TRUNC ] 0o600
+    Iocp.openfile iocp 1 filename Unix.[ O_CREAT; O_RDWR; O_TRUNC ] 0o600
   in
   let buf = Cstruct.of_string "Test data" in
   let write_id =
     IM.write iocp handle (Cstruct.to_bigarray buf) ~pos:0 ~len:(Cstruct.length buf) ~off:(Optint.Int63.zero)
   in
-  (match IM.get_queued_completion_status iocp ~timeout:1000 with
+  (match IM.completion_status iocp ~timeout:1000 with
   | None -> assert false
-  | Some cs -> Format.printf "%d %d\n" cs.IM.id write_id;  Alcotest.(check int) "write_id matches" cs.IM.id write_id);
+  | Some cs -> Format.printf "%d %d\n" (Iocp.Id.to_int cs.IM.id) (Iocp.Id.to_int write_id);  Alcotest.(check int) "write_id matches" (Iocp.Id.to_int cs.IM.id) (Iocp.Id.to_int write_id));
 
   let buf2 = Cstruct.create (Cstruct.length buf) in
   let read_id =
     IM.read iocp handle (Cstruct.to_bigarray buf2) ~pos:0 ~len:(Cstruct.length buf) ~off:(Optint.Int63.zero)
   in
-  (match IM.get_queued_completion_status iocp ~timeout:1000 with
+  (match IM.completion_status iocp ~timeout:1000 with
   | None -> assert false
   | Some cs ->
-    Format.printf "%d %d\n" cs.IM.id read_id;
+    Format.printf "%d %d\n" (Iocp.Id.to_int cs.IM.id) (Iocp.Id.to_int read_id);
     Format.printf "bytes transferred: %d\n" cs.bytes_transferred;
     Format.printf "error = %s\n" (match cs.error with | None -> "None" | Some e -> Unix.error_message e);
-    Alcotest.(check int) "read_id matches" cs.IM.id read_id);
+    Alcotest.(check int) "read_id matches" (Iocp.Id.to_int cs.IM.id) (Iocp.Id.to_int read_id));
   Format.eprintf "buf='%s' buf2='%s'\n%!" (Cstruct.to_string buf) (Cstruct.to_string buf2);
   assert (Cstruct.equal buf buf2)
 
