@@ -12,5 +12,5 @@
  (depends
    cstruct
    optint
-   (mdx :with-test)))
-(using mdx 0.1)
+   (mdx :with-test)
+   (bechamel :with-test)))
