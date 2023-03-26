@@ -24,7 +24,7 @@ type completion_status = private
 external get_queued_completion_status : t -> int -> completion_status
   = "ocaml_iocp_get_queued_completion_status"
 
-external peek : t -> completion_status = "ocaml_iocp_peek" [@@noalloc]
+external peek : t -> completion_status = "ocaml_iocp_peek"
 
 type unsafe_completion_status = private {
   mutable handle_id : id;
