@@ -7,7 +7,6 @@ module Wsabuf = Wsabuf
 module Overlapped = Overlapped
 module Handle = Handle
 module Raw = Raw
-module Managed = Managed
 module Accept_buffer = Accept_buffer
 module Sockaddr = Sockaddr
 

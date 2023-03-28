@@ -8,7 +8,6 @@ module Sockaddr = Sockaddr
 module Handle = Handle
 module Overlapped = Overlapped
 module Raw = Raw
-module Managed = Managed
 module Accept_buffer = Accept_buffer
 
 module Id = struct
