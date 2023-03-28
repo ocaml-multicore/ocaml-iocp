@@ -18,7 +18,6 @@ jobs:
             dra27: https://github.com/dra27/opam-repository.git#windows-5.0
             default: https://github.com/fdopen/opam-repository-mingw.git#opam2
 
-      - run: opam pin add . -n
       - run: opam pin add bechamel https://github.com/avsm/bechamel.git#fix-windows-ocaml5
       - run: opam install iocp --deps-only --with-test
       - run: opam exec -- dune runtest
