@@ -14,7 +14,7 @@ depends: [
   "optint"
   "mdx" {with-test}
   "alcotest" {with-test}
-  "bechamel" {with-test}
+  "bechamel" {>= "0.4.0" & with-test}
   "odoc" {with-doc}
 ]
 build: [
@@ -34,6 +34,3 @@ build: [
   ["dune" "install" "-p" name "--create-install-files" name]
 ]
 dev-repo: "git+https://github.com/patricoferris/ocaml-iocp.git"
-pin-depends: [
-[ "bechamel.dev" "git+https://github.com/avsm/bechamel.git#fix-windows-ocaml5" ]
-]

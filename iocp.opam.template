@@ -1,3 +1,0 @@
-pin-depends: [
-[ "bechamel.dev" "git+https://github.com/avsm/bechamel.git#fix-windows-ocaml5" ]
-]
