@@ -1,7 +1,6 @@
 (lang dune 2.9)
 (name iocp)
 (generate_opam_files true)
-(formatting disabled)
 (source (github patricoferris/ocaml-iocp))
 (license "MIT")
 (authors "Patrick Ferris")
@@ -13,5 +12,6 @@
  (depends
    cstruct
    optint
-   (mdx :with-test)))
-(using mdx 0.1)
+   (mdx :with-test)
+   (alcotest :with-test)
+   (bechamel :with-test)))

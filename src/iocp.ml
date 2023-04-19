@@ -3,212 +3,182 @@
    Distributed under the MIT license. See terms at the end of this file.
   ----------------------------------------------------------------------*)
 
-module Overlapped = struct
-  type t
-
-  type offset = Optint.Int63.t
-
-  external create : offset -> t = "ocaml_iocp_make_overlapped"
-  let create ?(off = Optint.Int63.zero) () =
-    create off
-end
-
-module Wsabuf = struct
-  type wsabuf
-
-  type t = wsabuf * int * Cstruct.t list
-  
-  external create : Cstruct.t list -> int -> wsabuf = "ocaml_iocp_make_wsabuf"
-  
-  let create bufs =
-    let len = List.length bufs in
-    (create bufs len, len, bufs)
-end
-
+module Wsabuf = Wsabuf
 module Sockaddr = Sockaddr
+module Handle = Handle
+module Overlapped = Overlapped
+module Raw = Raw
+module Accept_buffer = Accept_buffer
 
-module Handle = struct
-  type t = Unix.file_descr
-  let to_unix t = t
-  external openfile : string -> Unix.open_flag list -> Unix.file_perm -> t = "ocaml_iocp_unix_open"
-  external cancel : t -> Overlapped.t -> unit = "ocaml_iocp_cancel"
-  external update_accept_ctx : t -> unit = "ocaml_iocp_update_accept_ctx"
-  external update_connect_ctx : t -> unit = "ocaml_iocp_update_connect_ctx"
-  external shutdown : t -> Unix.shutdown_command -> unit = "caml_iocp_shutdown"
-  external pipe' : string -> t * t = "ocaml_iocp_unix_pipe"
-
-  let pipe name =
-    let path = "\\\\.\\pipe\\" ^ name in
-    pipe' path
-
-  let of_unix t = t
+module Id = struct
+  type t = int
+  let compare : t -> t -> int = Int.compare
+  let hash : t -> int = Hashtbl.hash
+  let equal : t -> t -> bool = Int.equal
+  let to_int (a:int) = a
 end
 
-(* AcceptEx only puts data (like the remote address) in a special buffer that needs to
-   be parsed by [GetAcceptExSockaddrs]. We don't care about the first message received 
-   so we don't need that much space in the buffer. *)
-module Accept_buffer = struct
-  type t = Cstruct.t
-  
-  external get_remote : Cstruct.buffer -> Handle.t -> Sockaddr.t -> unit = "ocaml_iocp_get_accept_ex_sockaddr"
+type fd = Handle.t
 
-  let get_remote t h =
-    let s = Sockaddr.create () in
-    get_remote (Cstruct.to_bigarray t) h s;
-    s
+module H = Hashtbl.Make(Id)
 
-  let create () =
-    (* TODO: get sizeof(sock_addr_union) to work the size out properly *)
-    let buf = Cstruct.create 256 in
-    buf
-end
+type roots =
+  | ReadWrite of Cstruct.buffer
+  | RecvSend of Wsabuf.t
+  | Connect of Sockaddr.t
 
-(* Bindings to C API *)
-module Iocp = struct
-  type t = Handle.t
-  (* A handle to an I/O completion port *)
-
-  type id = Heap.ptr
-
-  (* Completion Port Management *)
-  external create_io_completion_port : int -> t = "ocaml_iocp_create_io_completion_port"
-  external create_io_completion_port_with_fd : Handle.t -> 'a -> int -> t = "ocaml_iocp_create_io_completion_port_with_fd"
-
-  type completion_status = private
-    | Cs_none
-    | Cs_some of { heap_ptr : id; bytes_transferred : int } 
-
-  external get_queued_completion_status : t -> Overlapped.t -> completion_status = "ocaml_iocp_get_queued_completion_status"
-  
-  let get_queued_completion_status t =
-    let o = Overlapped.create () in
-    get_queued_completion_status t o
-
-  external peek : t -> completion_status = "ocaml_iocp_peek" [@@noalloc]
-
-  (* Operations *)
-  external read : t -> Handle.t -> id -> Cstruct.buffer -> int -> int -> Overlapped.t -> bool = "ocaml_iocp_read_bytes" "ocaml_iocp_read" [@@noalloc]
-  external write : t -> Handle.t -> id -> Cstruct.buffer -> int -> int -> Overlapped.t -> bool = "ocaml_iocp_write_bytes" "ocaml_iocp_write" [@@noalloc]
-  external accept : t -> Handle.t -> Handle.t -> id -> Cstruct.buffer -> Overlapped.t -> bool = "ocaml_iocp_accept_bytes" "ocaml_iocp_accept" [@@noalloc]
-  external connect : t -> Handle.t -> Sockaddr.t -> id -> Overlapped.t -> bool = "ocaml_iocp_connect" [@@noalloc]
-  external send : t -> Handle.t -> Wsabuf.t -> id -> Overlapped.t -> bool = "ocaml_iocp_send" [@@noalloc]
-  external recv : t -> Handle.t -> Wsabuf.t -> id -> Overlapped.t -> bool = "ocaml_iocp_recv" [@@noalloc]
-end
-
-type 'a t = {
-  id : < >;
-  iocp : Iocp.t;
-  data : 'a Heap.t;
-  mutable dirty : bool;
+type t = {
+  iocp : Raw.t;
+  m : Mutex.t;
+  mutable external_key : int;
+  in_flight : (Handle.t * int Overlapped.t * roots * int) H.t;
+  mutable unused_overlapped : int Overlapped.t list;
+  allocated_overlapped : int Overlapped.t array;
+  external_keys : int array;
 }
 
-module Generic_ring = struct
-  type ring = T : 'a t -> ring
-  type t = ring
-  let compare (T a) (T b) = compare a.id b.id
-end
+type completion_status = {
+  bytes_transferred : int;
+  id : Id.t;
+  error : Unix.error option;
+}
 
-module Ring_set = Set.Make(Generic_ring)
+exception Out_of_overlapped
 
-(* Garbage collection and buffers shared with the Linux kernel.
-   Many uring operations involve passing Linux the address of a buffer to which it
-   should write the results. This means that both Linux and OCaml have pointers to the
-   buffer, and it must not be freed until both have finished with it, but the OCaml
-   garbage collector doesn't know this. To avoid OCaml's GC freeing the buffer while
-   Linux is still using it:
-   - We attach all such buffers to their [t.data] entry, so they don't get freed until
-     the job is complete, even if the caller loses interest in the buffer.
-   - We add the ring itself to the global [gc_roots] set, so that [t.data] can't be freed
-     unless [exit] is called, which checks that there are no operations in progress. *)
-let gc_roots = Atomic.make Ring_set.empty
+let create ?(overlapped = 1024) n =
+  let allocated_overlapped = Array.init overlapped (fun i -> Overlapped.create i) in
+  let external_keys = Array.init overlapped (fun _ -> -1) in
+  let unused_overlapped = Array.to_list allocated_overlapped in
+  (* Format.eprintf "All created\n%!"; *)
+  { iocp = Raw.create_io_completion_port n
+  ; m = Mutex.create ()
+  ; in_flight = H.create 255
+  ; external_key = 1
+  ; unused_overlapped
+  ; allocated_overlapped
+  ; external_keys }
 
-let rec update_gc_roots fn =
-  let old_set = Atomic.get gc_roots in
-  let new_set = fn old_set in
-  if not (Atomic.compare_and_set gc_roots old_set new_set) then
-    update_gc_roots fn
+let handle_of_fd v fd key =
+  Raw.associate_fd_with_iocp v.iocp fd key
 
-let register_gc_root t =
-  update_gc_roots (Ring_set.add (Generic_ring.T t))
+let get_overlapped v fd root =
+  Mutex.lock v.m;
+  match v.unused_overlapped with
+  | [] -> Mutex.unlock v.m; raise Out_of_overlapped
+  | ol :: ols ->
+    (* Format.eprintf "Getting overlapped\n%!"; *)
+    let id = Overlapped.id ol in
+    let external_key = v.external_key in
+    let key = Overlapped.get_key ol in
+    v.external_key <- external_key + 1;
+    v.external_keys.(key) <- external_key;
+    v.unused_overlapped <- ols;
+    H.replace v.in_flight id (fd, ol, root, external_key);
+    Mutex.unlock v.m;
+    (* Format.eprintf "Found an overlapped: id=%d external_key=%d internal_key=%d\n%!" id external_key key; *)
+    ol, external_key
 
-let unregister_gc_root t =
-  update_gc_roots (Ring_set.remove (Generic_ring.T t))
+let openfile t = Raw.openfile t.iocp
 
-let create ?(threads=0) () =
-  let id = object end in
-  let t = { id; iocp = Iocp.create_io_completion_port threads; data = Heap.create 128; dirty = false } in
-  register_gc_root t;
-  t
+let read : t -> Handle.t -> Cstruct.buffer -> pos:int -> len:int -> off:Optint.Int63.t -> Id.t =
+  fun v fd buf ~pos ~len ~off ->
+    let root = ReadWrite buf in
+    let ol, external_key = get_overlapped v fd root in
+    Overlapped.set_offset ol off;
+    Raw.read v.iocp fd buf len pos ol;
+    external_key
 
-let create_with_fd ?(threads=0) fd data =
-  let id = object end in
-  let t = { id; iocp = Iocp.create_io_completion_port_with_fd fd data threads; data = Heap.create 128; dirty = false } in
-  register_gc_root t;
-  t
+let write : t -> Handle.t -> Cstruct.buffer -> pos:int -> len:int -> off:Optint.Int63.t -> Id.t =
+  fun v fd buf ~pos ~len ~off -> 
+    let root = ReadWrite buf in
+    let ol, external_key = get_overlapped v fd root in
+    Overlapped.set_offset ol off;
+    Raw.write v.iocp fd buf len pos ol;
+    external_key
 
-type 'a completion_status = { data : 'a; bytes_transferred : int }
+let completion_status : t -> timeout:int -> completion_status option =
+  fun v ~timeout ->
+    match Raw.get_queued_completion_status v.iocp timeout with
+    | Raw.Cs_none -> None
+    | Raw.Cs_some cs ->
+      Mutex.lock v.m;
+      (* let (_buf, _ol) = H.find v.in_flight cs.overlapped_id in *)
+      H.remove v.in_flight cs.overlapped_id;
+      let ol_key = Overlapped.unsafe_key cs.overlapped_id in
+      let external_key = v.external_keys.(ol_key) in
+      v.unused_overlapped <- v.allocated_overlapped.(ol_key) :: v.unused_overlapped;
+      Mutex.unlock v.m;
+      Some { bytes_transferred = cs.bytes_transferred
+          ; id = external_key
+          ; error = cs.error }
 
-let fn_on_iocp fn t =
-  match fn t.iocp with
-  | Iocp.Cs_none -> None
-  | Cs_some { heap_ptr; bytes_transferred } ->
-    let data = Heap.free t.data heap_ptr in
-    Some { data; bytes_transferred }
+let accept : t -> Handle.t -> Handle.t -> Accept_buffer.t -> Id.t =
+  fun v sock sock_accept addr_buf ->
+    let buf = Cstruct.to_bigarray addr_buf in
+    let root = ReadWrite buf in
+    let ol, external_id = get_overlapped v sock root in
+    let () = Raw.accept sock sock_accept buf ol in
+    external_id
 
-let get_queued_completion_status t = 
-  fn_on_iocp Iocp.get_queued_completion_status t
+let recv : t -> Handle.t -> Cstruct.t list -> Id.t =
+  fun v sock bufs ->
+    let wsabuf = Wsabuf.create bufs in
+    let root = RecvSend wsabuf in
+    let ol, external_id = get_overlapped v sock root in
+    let () = Raw.recv v.iocp sock wsabuf ol in
+    external_id
 
-let peek t =
-  fn_on_iocp Iocp.peek t
+let send : t -> Handle.t -> Cstruct.t list -> Id.t =
+  fun v sock bufs ->
+    let wsabuf = Wsabuf.create bufs in
+    let root = RecvSend wsabuf in
+    let ol, external_id = get_overlapped v sock root in
+    let () = Raw.send v.iocp sock wsabuf ol in
+    external_id
+    
+let connect : t -> Handle.t -> Sockaddr.t -> Id.t =
+  fun v sock addr ->
+    let root = Connect addr in
+    let ol, external_id = get_overlapped v sock root in
+    let () = Raw.connect v.iocp sock addr ol in
+    external_id
 
-type 'a job = 'a Heap.entry
+let garbage = Atomic.make []
 
-let with_id_full : type a. a t -> (Heap.ptr -> bool) -> a -> extra_data:'b -> a job option =
-  fun t fn datum ~extra_data ->
-    match Heap.alloc t.data datum ~extra_data with
-    | exception Heap.No_space -> None
-    | entry ->
-      let ptr = Heap.ptr entry in
-      let has_space = fn ptr in
-      if has_space then (
-        t.dirty <- true;
-        Some entry
-      ) else (
-        ignore (Heap.free t.data ptr : a);
-        None
-      )
-  
-(* let with_id t fn a = with_id_full t fn a ~extra_data:() *)
+let finaliser v =
+  (* Format.eprintf "Finaliser for Safest.t\n%!"; *)
+  H.iter (fun _ (fd, ol, _, _) ->
+    Format.eprintf "Cancelling somthing\n%!";
+    Raw.cancel fd ol) v.in_flight;
+  let rec loop () =
+    if (H.length v.in_flight = 0) then ( (*Format.eprintf "All done\n%!" *) ()) else begin
+      Format.eprintf "Something to wait for\n%!";
+      match completion_status v ~timeout:100 with
+      | None ->
+        Format.eprintf "Error, failed to cancel some outstanding operations (%d)" (H.length v.in_flight);
+        let rec add_to_garbage () =
+          let cur = Atomic.get garbage in
+          if Atomic.compare_and_set garbage cur (v :: cur)
+          then ()
+          else add_to_garbage ()
+        in
+        add_to_garbage ()
+      | _ -> loop ()
+      end
+    in loop ()
 
-let read t ~file_offset fd buf ~off ~len data ol =
-  with_id_full t (fun id -> Iocp.read t.iocp fd id (Cstruct.to_bigarray buf) len off ol) data ~extra_data:buf
-
-let write t ~file_offset fd buf ~off ~len data ol =
-  let ol = Overlapped.create ~off:file_offset () in
-  with_id_full t (fun id -> Iocp.write t.iocp fd id (Cstruct.to_bigarray buf) len off ol) data ~extra_data:buf
-
-let accept t fd acc buf data ol =
-  let accept_buffer = Cstruct.to_bigarray buf in
-  with_id_full t (fun id -> Iocp.accept t.iocp fd acc id accept_buffer ol) data ~extra_data:(acc, buf, ol, accept_buffer)
-
-let connect t fd addr data ol =
-  with_id_full t (fun id -> Iocp.connect t.iocp fd (Sockaddr.of_unix addr) id ol) data ~extra_data:(addr, ol)
-
-let send t sock bufs data ol =
-  let wsabuf = Wsabuf.create bufs in
-  with_id_full t (fun id -> Iocp.send t.iocp sock wsabuf id ol) data ~extra_data:wsabuf
-
-let recv t sock bufs data ol =
-  let wsabuf = Wsabuf.create bufs in
-  with_id_full t (fun id -> Iocp.recv t.iocp sock wsabuf id ol) data ~extra_data:wsabuf
+let create n =
+  let v = create n in
+  Gc.finalise finaliser v;
+  v
 
 (*---------------------------------------------------------------------------
   Copyright (c) 2022 <patrick@sirref.org>
-  
+
   Permission to use, copy, modify, and/or distribute this software for any
   purpose with or without fee is hereby granted, provided that the above
   copyright notice and this permission notice appear in all copies.
-  
+
   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL

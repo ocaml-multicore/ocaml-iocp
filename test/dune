@@ -1,19 +1,42 @@
 (executables
- (names copy net)
- (modules copy net)
+ (names copy net safe_net)
+ (modules copy net safe_net)
+ (libraries iocp copy_lib))
+
+(library
+ (name lwtcp_lib)
+ (modules lwtcp_lib)
+ (libraries lwt.unix logs))
+
+(library
+ (name copy_lib)
+ (modules copy_lib)
  (libraries iocp))
 
-(test
- (name pipe)
- (modules pipe)
- (libraries iocp))
+(executable
+ (name t1)
+ (modules t1)
+ (libraries iocp alcotest threads))
 
 (rule
  (alias runtest)
  (deps ./test.md)
  (target ./test.out)
- (action (run ./copy.exe ./test.md ./test.out)))
+ (action
+  (run ./copy.exe ./test.md ./test.out)))
 
 (rule
  (alias runtest)
- (action (diff test.md test.out)))
+ (action
+  (run ./t1.exe)))
+
+(executable
+ (name cptest)
+ (modules cptest)
+ (libraries lwtcp_lib copy_lib bechamel bechamel.monotonic_clock bechamel_csv))
+
+(rule
+ (alias runbenchmark)
+ (action
+  (run ./cptest.exe)))
+

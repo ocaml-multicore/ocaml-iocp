@@ -23,7 +23,7 @@
  type 'a entry
  (** An element in a heap. *)
  
- type ptr = private int
+ type ptr = int
  (** The index of an entry. *)
 
  val ptr_to_int : ptr -> int
