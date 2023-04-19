@@ -14,4 +14,4 @@
    optint
    (mdx :with-test)
    (alcotest :with-test)
-   (bechamel :with-test)))
+   (bechamel (and (>= 0.4.0) :with-test))))
